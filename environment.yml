@@ -1,0 +1,19 @@
+name: wikiwho-demo-environment
+channels:
+  - conda-forge
+dependencies:
+  - python=>3.6
+  - appmode
+  - numpy
+  - pandas
+  - jupyter
+  - pip:
+    - wordcloud
+    - nbstripout
+    - wikiwho_wrapper
+    - ipywidgets==7.4.2
+    - matplotlib
+    - plotly
+    - qgrid
+    - nbstripout
+    - multidict

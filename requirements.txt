@@ -1,0 +1,11 @@
+wordcloud
+plotly
+matplotlib
+jupyter
+pandas
+wikiwho_wrapper
+appmode
+nbstripout
+bokeh
+qgrid
+multidict
