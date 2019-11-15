@@ -70,3 +70,41 @@ def hide_toggle2(for_next=False, hiding_text='Toggle show/hide'):
     )
 
     return HTML(html)
+
+def hide_cell(hide_code=True):
+    if hide_code:
+        html = """
+                <script>
+                    var code_show=true;
+                    function code_toggle() {
+                    $('div.prompt').hide(); // always hide prompt
+
+                    if (code_show){
+                        $('div.input').hide();
+                    } else {
+                        $('div.input').show();
+                    }
+                    code_show = !code_show
+                    }
+                    $( document ).ready(code_toggle);
+                </script>
+            """
+    else:
+        html = """
+                <script>
+                    var code_show=false;
+                    function code_toggle() {
+                    $('div.prompt').hide(); // always hide prompt
+
+                    if (code_show){
+                        $('div.input').hide();
+                    } else {
+                        $('div.input').show();
+                    }
+                    code_show = !code_show
+                    }
+                    $( document ).ready(code_toggle);
+               </script>
+           """
+           
+    return display(HTML(html))
