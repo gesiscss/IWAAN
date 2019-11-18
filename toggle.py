@@ -36,9 +36,10 @@ def hide_toggle(for_next=False, hiding_text='Toggle show/hide'):
 
     return HTML(html)
 
-def hide_toggle2(for_next=False, hiding_text='Toggle show/hide'):
+def hide_toggle2(for_next=False, for_next_next=False, hiding_text='Toggle show/hide'):
     this_cell = """$('div.cell.code_cell.rendered.selected')"""
     next_cell = this_cell + '.next()'
+    next_next = this_cell + '.next().next()'
 
     toggle_text = hiding_text  # text shown on toggle link
     target_cell = this_cell  # target cell to control with toggle
@@ -47,6 +48,11 @@ def hide_toggle2(for_next=False, hiding_text='Toggle show/hide'):
     if for_next:
         target_cell = next_cell
         toggle_text += ' next cell'
+        js_hide_current = this_cell + '.find("div.input").hide();'
+    
+    if for_next_next:
+        target_cell = next_next
+        toggle_text += ' next next cell'
         js_hide_current = this_cell + '.find("div.input").hide();'
 
     js_f_name = 'code_toggle_{}'.format(str(random.randint(1,2**64)))
