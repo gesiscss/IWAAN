@@ -120,3 +120,18 @@ def hide_cell(hide_code=True):
            """
            
     return display(HTML(html))
+
+def show_all():
+    html = """
+        <script>
+            function code_toggle() {
+            $('div.prompt').show(); // always hide prompt
+            $('div.input').show();
+            $('div.output').show();
+            }
+                                    
+        </script>
+        <a href="javascript:code_toggle();">Show all the code</a>
+    """
+    
+    return display(HTML(html))
