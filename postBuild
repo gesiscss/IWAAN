@@ -1,3 +1,5 @@
 
 #nbstripout --install
 jupyter nbextension enable --py --sys-prefix qgrid
+jupyter contrib nbextension install --user
+jupyter nbextension enable collapsible_headings/main
