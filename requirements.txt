@@ -9,5 +9,3 @@ nbstripout
 bokeh
 qgrid
 multidict
-jupyter-contrib-nbextensions
-jupyter_nbextensions_configurator
