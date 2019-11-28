@@ -17,3 +17,5 @@ dependencies:
     - qgrid
     - nbstripout
     - multidict
+    -jupyter-contrib-nbextensions
+    -jupyter_nbextensions_configurator
