@@ -3,3 +3,4 @@
 jupyter nbextension enable --py --sys-prefix qgrid
 jupyter contrib nbextension install --user
 jupyter nbextension enable --py widgetsnbextension
+jupyter nbextension enable init_cell/main
