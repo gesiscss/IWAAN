@@ -5,3 +5,4 @@ jupyter contrib nbextension install --user
 jupyter nbextension enable --py widgetsnbextension
 jupyter nbextension enable init_cell/main
 jupyter trust 1.\ General\ Metadata\ of\ a\ Wikipedia\ Article.ipynb
+jupyter nbextension enable hide_input_all/main
