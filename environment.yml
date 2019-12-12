@@ -17,3 +17,4 @@ dependencies:
     - nbstripout
     - multidict
     - jupyter_contrib_nbextensions
+    - keyboard

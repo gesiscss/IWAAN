@@ -9,3 +9,4 @@ bokeh
 qgrid
 multidict
 jupyter_contrib_nbextensions
+keyboard
