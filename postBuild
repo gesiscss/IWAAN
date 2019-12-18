@@ -6,3 +6,6 @@ jupyter nbextension enable init_cell/main
 jupyter trust 1.\ General\ Metadata\ of\ a\ Wikipedia\ Article.ipynb
 jupyter trust 2.\ Using\ WikiWho\ to\ analyze\ a\ page.ipynb
 jupyter nbextension enable hide_input_all/main
+jupyter nbextension enable hide_input/main
+jupyter nbextension enable exercise2/main
+jupyter nbextension enable rubberband/main
