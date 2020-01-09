@@ -2,6 +2,8 @@
 jupyter nbextension enable --py --sys-prefix qgrid
 jupyter contrib nbextension install --user
 jupyter nbextension enable --py widgetsnbextension
+cp main.css /srv/conda/envs/notebook/lib/python3.8/site-packages/jupyter_contrib_nbextensions/nbextensions/exercise2
+jupyter contrib nbextension install --user
 jupyter nbextension enable init_cell/main
 jupyter trust 1.\ General\ Metadata\ of\ a\ Wikipedia\ Article.ipynb
 jupyter trust 2.\ Using\ WikiWho\ to\ analyze\ a\ page.ipynb
