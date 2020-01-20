@@ -9,7 +9,7 @@ jupyter trust 1.\ General\ Metadata\ of\ a\ Wikipedia\ Article.ipynb
 jupyter trust 2.\ Using\ WikiWho\ to\ analyze\ a\ page.ipynb
 jupyter trust 3.\ Using\ WikiWho\ to\ analyze\ an\ editor\ in\ the\ context\ of\ a\ page.ipynb
 jupyter trust 4.\ Using\ WikiWho\ to\ analyze\ information\ about\ conflicting\ editors.ipynb
-jupyter trust 5.\ Using\ Wikiwho\ to\ explore\ the\ history\ of\ an\ editor
+jupyter trust 5.\ Using\ Wikiwho\ to\ explore\ the\ history\ of\ an\ editor.ipynb
 jupyter nbextension enable hide_input_all/main
 jupyter nbextension enable hide_input/main
 jupyter nbextension enable exercise2/main
