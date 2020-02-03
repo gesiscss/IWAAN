@@ -4,7 +4,7 @@ channels:
 dependencies:
   - python=>3.6
   - numpy
-  - pandas
+  - pandas==0.25.3
   - jupyter
   - pip:
     - wordcloud
