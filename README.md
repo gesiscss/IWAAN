@@ -1,6 +1,6 @@
 [![Binder](https://notebooks.gesis.org/binder/badge_logo.svg)](https://notebooks.gesis.org/binder/v2/gh/gesiscss/wikiwho_demo_new/master?filepath=1.%20General%20Metadata%20of%20a%20Wikipedia%20Article.ipynb)
 <img src="https://user-images.githubusercontent.com/35532045/36342863-ba470006-1404-11e8-9f9f-d1249e4a0b37.png" width="100">
-<img src="https://user-images.githubusercontent.com/35532045/35407485-6c779c5a-020c-11e8-9060-5c35e09a0124.png" width="200">
+
 
 # WikiWho Demo
 
@@ -35,21 +35,10 @@ You can switch between the various notebooks.
 *  Python version 3.6
 *  Jupyter Notebook Framework
 
-
 ## Need Help? Found a bug?
 
-Submit the issue to GitHub if you find one, and feel free to submit pull requests with bug fixes or changes.
+Submit an issue to GitHub if you find one, and feel free to submit pull requests with bug fixes or changes.
 
-## Contributors
-
-* @robertour
-* @stannida
-* @Tara-Morovatdar
-* @bheibel 
-* @fkramer 
-* @rlafraie 
-* @vibhav 
-
-## Supervisor
+## Contact
 
 *  Dr. Fabian Flöck (@faflo)
