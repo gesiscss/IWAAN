@@ -2,7 +2,7 @@
 <img src="https://user-images.githubusercontent.com/35532045/36342863-ba470006-1404-11e8-9f9f-d1249e4a0b37.png" width="100">
 
 
-# WikiWho Demo
+# Interactive Wikipedia article dynamics explorer 
 
 ## Description
 
