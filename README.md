@@ -3,7 +3,7 @@
 
 
 # IWADE - Interactive Wikipedia article dynamics explorer 
-... entirely based on interactive, repurposable and open Jupyter Notebooks (no coding needed - but coding enabled)
+... entirely based on interactive, repurposable and open Jupyter Notebooks (no coding needed - but code is transparent)
 
 ## Description
 
