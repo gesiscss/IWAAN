@@ -18,11 +18,11 @@ class ConflictCalculatorListener():
         self.df = df
         self.df_plotted = None
 
-    def listen(self, _range, granularity, black, red):
+    def listen(self, _range1, _range2, granularity, black, red):
         df = self.df
 
-        df = df[(df.rev_time.dt.date >= _range[0]) &
-                (df.rev_time.dt.date <= _range[1])]
+        df = df[(df.rev_time.dt.date >= _range1) &
+                (df.rev_time.dt.date <= _range2)]
 
         # calculate the aggreated values
         df = df.groupby(pd.Grouper(
@@ -70,7 +70,7 @@ class ConflictCalculatorListener():
                                    yaxis=dict(
                                        ticklen=5, gridwidth=2, range=_range),
                                    legend=dict(x=0.5, y=1.2),
-                                   showlegend=True, barmode='group')
+                                   showlegend=True, barmode='group', bargap=0.9)
 
         self.df_plotted = df
 
@@ -137,10 +137,10 @@ class ConflictCalculatorListener():
             self.is_norm_scale = False
 
         self.traces.append(
-            graph_objs.Scatter(
+            graph_objs.Bar(
                 x=df.loc[sel,'rev_time'], y=y,
                 name=metric,
-                marker=dict(color=color))
+                marker_color=color)
         )
 
         return df
