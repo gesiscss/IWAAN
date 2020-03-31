@@ -105,6 +105,13 @@ class WikipediaDV(DataView):
                'users'] for chunk in chunks(editors, 50))
 
         return pd.DataFrame(x for x in chain(*res))
+    
+    def get_talk_content(self, pageid: Union[int, str]) -> pd.Series:
+
+        res = self.api.get_talk_content(pageid) 
+        talk_content = next(iter(res["query"]["pages"].values()))
+
+        return pd.DataFrame(talk_content["revisions"])
 
 
 class WikipediaAPI(API):
@@ -211,3 +218,10 @@ class WikipediaAPI(API):
             url = f'{self.base}action=query&list=users&ususers={editors_str}&usprop=blockinfo|editcount|registration|gender&format=json'
 
         return self.request(url)
+    
+    def get_talk_content(self, pageid: Union[int, str]) -> dict:
+        url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|user|comment&pageids={pageid}'
+
+        return self.request(url)
+
+    
