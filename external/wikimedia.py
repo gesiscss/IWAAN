@@ -34,9 +34,9 @@ class WikiMediaAPI(API):
         project (TYPE): Description
     """
 
-    def __init__(self,
+    def __init__(self, lng: str='en',
                  domain: str='wikimedia.org',
-                 project: str='en.wikipedia.org',
+                 project: str='wikipedia.org',
                  version: str='rest_v1',
                  api_username: str=None,
                  api_password: str=None,
@@ -56,13 +56,14 @@ class WikiMediaAPI(API):
             attempts (int, optional): the number of attempts before giving up trying to connect
         """
         super().__init__(protocol=protocol,
+                         lng=lng,
                          domain=domain,
                          api_username=api_username,
                          api_password=api_password,
                          api_key=api_key,
                          attempts=attempts)
         self.base = f'{self.base}api/{version}/'
-        self.project = project
+        self.project = lng + '.' + project
 
     def get_pageviews(self, article_name: str, granularity: str = 'monthly'):
         """Get pageview counts for an article
