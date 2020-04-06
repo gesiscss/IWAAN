@@ -15,22 +15,9 @@ class TalksListener():
     def listen(self, begin, end, granularity):
         df = self.df
         
-        #begin = pd.to_datetime(begin).tz_localize(None)
-        #end = pd.to_datetime(end).tz_localize(None)
-
-#         if begin < end or begin == end:
-#             variable = 0
-
-#         elif begin > end:
-#             variable = end
-#             end = begin
-#             begin = variable
-#         else:
-#             variable = 1
-#             print('Can not be the case!')
 
         filtered_df = df[(df.year_month.dt.date >= begin) & (df.year_month.dt.date <= end)]
-        groupped_df = filtered_df.groupby(pd.Grouper(key='year_month', freq=granularity[0]+'S')).count().reset_index()
+        groupped_df = filtered_df.groupby(pd.Grouper(key='year_month', freq=granularity[0])).count().reset_index()
 
         # Plot Graph
 
