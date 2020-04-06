@@ -58,9 +58,9 @@ class XtoolsAPI(API):
         project (TYPE): Description
     """
 
-    def __init__(self,
+    def __init__(self, lng='en',
                  domain: str='xtools.wmflabs.org',
-                 project: str='en.wikipedia.org',
+                 project: str='wikipedia.org',
                  api_username: str=None,
                  api_password: str=None,
                  api_key: str=None,
@@ -69,8 +69,9 @@ class XtoolsAPI(API):
         """Constructor of the WikiWhoAPI
 
         Args:
+            lng (str): the language used for api, e.g. en
             domain (str, optional): the domain that hosts the api
-            project (str, optional): e.g. en.wikipedia.org
+            project (str, optional): e.g. wikipedia.org
             api_username (str, optional): WikiWho API username
             api_password (str, optional): WikiWho API password
             api_key (str, optional): WikiWho API key
@@ -78,12 +79,13 @@ class XtoolsAPI(API):
             attempts (int, optional): the number of attempts before giving up trying to connect
         """
         super().__init__(protocol=protocol,
+                         lng=lng,
                          domain=domain,
                          api_username=api_username,
                          api_password=api_password,
                          api_key=api_key,
                          attempts=attempts)
-        self.project = project
+        self.project = lng + '.' + project
         self.base = f"{self.base}api/"
 
     def get_page_info(self, page_name: str) -> dict:

@@ -63,10 +63,11 @@ class WCListener():
 
 class WCActionsListener():
     
-    def __init__(self, sources, token_source, max_words=100):
+    def __init__(self, sources, token_source, lng, max_words=100):
         self.sources = sources
         self.max_words = max_words
         self.token_source = token_source
+        self.lng=lng
         self._range1 = 0
         self._range2 = 1
         self.adds = None
@@ -87,7 +88,7 @@ class WCActionsListener():
                 print('Please select a revision!')
             else:
                 rev_selected = self.qgrid_selected_token.get_selected_df().reset_index()['rev_id'].iloc[0]
-                url = f'https://en.wikipedia.org/w/index.php?title=TITLEDOESNTMATTER&diff={rev_selected}&diffmode=source'
+                url = f'https://{self.lng}.wikipedia.org/w/index.php?title=TITLEDOESNTMATTER&diff={rev_selected}&diffmode=source'
                 print(url)
                    
     def token_selection_change(self, change):

@@ -124,8 +124,8 @@ class WikipediaAPI(API):
         project (TYPE): Description
     """
 
-    def __init__(self,
-                 domain: str = 'en.wikipedia.org',
+    def __init__(self, lng: str = 'en',
+                 domain: str = 'wikipedia.org',
                  api_username: str = None,
                  api_password: str = None,
                  api_key: str = None,
@@ -146,6 +146,7 @@ class WikipediaAPI(API):
             version (str, optional): version of the API (e.g. rest_v1)
         """
         super().__init__(protocol=protocol,
+                         lng=lng,
                          domain=domain,
                          api_username=api_username,
                          api_password=api_password,

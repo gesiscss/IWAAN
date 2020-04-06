@@ -41,7 +41,7 @@ class OwnedListener():
         else:
             self.summ = pd.DataFrame([], columns = ['day', 'abs', 'all', 'res'])
 
-    def listen(self, _range, granularity, trace):
+    def listen(self, _range1, _range2, granularity, trace):
 
         df = self.summ
 
@@ -49,8 +49,8 @@ class OwnedListener():
             display(md("***It is not possible to plot the tokens owned because this editor has never owned any token.***"))
             return
 
-        df = df[(df.day.dt.date >= _range[0]) &
-                (df.day.dt.date <= _range[1] + datetime.timedelta(days=1))].copy()
+        df = df[(df.day.dt.date >= _range1) &
+                (df.day.dt.date <= _range2 + datetime.timedelta(days=1))].copy()
 
         self.traces = []
         if trace == 'Tokens Owned':

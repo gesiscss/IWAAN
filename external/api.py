@@ -15,7 +15,7 @@ class API:
         base (url): Base request url
     """
 
-    def __init__(self,
+    def __init__(self, lng: str,
                  domain: str,
                  api_username: str=None,
                  api_password: str=None,
@@ -25,7 +25,8 @@ class API:
                  attempts: int=2):
         """Constructor of the WikiWhoAPI
 
-        Args:
+        Args: 
+            lng (str): the language used for api
             domain (str): the domain that hosts the api
             api_username (str, optional): API username
             api_password (str, optional): API password
@@ -46,8 +47,10 @@ class API:
             self.session.params[api_key_name] = api_key
 
         self.attempts = attempts
-
-        self.base = f'{protocol}://{domain}/'
+        if domain == 'wikipedia.org':
+            self.base = f'{protocol}://{lng}' + '.' + f'{domain}/'
+        else:
+            self.base = f'{protocol}://{domain}/'
 
     def request(self, url: str) -> dict:
         """Do the request

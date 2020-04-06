@@ -12,6 +12,79 @@ class TokensManager:
         self.maxwords = maxwords
         self.all_actions = all_actions
         
+        
+    def get_states(self):
+        sample = self.all_actions.copy().reset_index(drop=True)
+        
+        # Get differences of columns 'token_id' and 'rev_time'
+        diff_actions = sample[['token_id', 'rev_time']] - sample.shift(1)[['token_id', 'rev_time']]
+        diff_actions = diff_actions.rename({'token_id': 'tokenid_diff', 'rev_time': 'time_diff'}, axis=1)
+
+        sample[['tokenid_diff', 'time_diff']] = diff_actions
+
+        sample.fillna(1.0, inplace=True)
+        
+        # Boolean for adds action
+        bool_adds = sample['tokenid_diff'] != 0
+        sample['bool_adds'] = bool_adds
+        
+        # Boolean for dels action
+        bool_dels = sample['action'] == 'out'
+        sample['bool_dels'] = bool_dels
+        
+        # Boolean for reins action
+        sample['bool_reins'] = ~bool_adds
+        sample[['bool_adds', 'bool_dels', 'bool_reins']] = sample[['bool_adds', 'bool_dels', 'bool_reins']].astype(int)
+        sample['reins-dels'] = sample['bool_reins'] - sample['bool_dels']
+        sample = sample.drop('bool_reins', axis=1).rename({'reins-dels':'bool_reins'}, axis=1)
+        
+        # Boolean for time.
+        sample['time_diff'] = sample['time_diff'].shift(-1)
+
+        adds_index = sample[sample['bool_adds'] == 1].index
+        last_index = pd.Index(list(adds_index[1:] - 1) + [adds_index[-1]])
+
+        sample['bool_last'] = 0
+        sample.loc[last_index, 'bool_last']=1
+
+        sample['bool_survival'] = 0
+
+        survival_df = pd.DataFrame(
+            ~(sample[sample['bool_last'] == 0]['time_diff'] < timedelta(2,0,0))).rename({'time_diff':'survival'},axis=1).astype(int)
+
+        survival_idx = survival_df[survival_df['survival'] == 1].index
+
+        sample.loc[survival_idx, 'bool_survival'] = 1
+        sample['bool_survive'] = sample['bool_survival'] + sample['bool_last']
+        sample = sample.drop(['bool_last', 'bool_survival'], axis=1)
+        
+        return sample
+    
+    
+    def _action_survival(self, df_with_bools, bool_col):
+        action = df_with_bools.copy()
+        action['survive'] = action[bool_col] & action['bool_survive']
+        action = action[action[bool_col] == True].reset_index(drop=True)
+        action = action.drop(['tokenid_diff', 'time_diff','bool_adds', 'bool_dels', 'bool_reins', 'bool_survive'], axis=1)
+        action['survive'] = action['survive'].astype(int)
+        action.set_index('rev_id', inplace=True)
+    
+        return action
+    
+    def token_survive(self):
+        sample = self.get_states()
+        
+        # Convert all 0-1 to boolean.
+        sample[['bool_adds', 'bool_dels', 'bool_reins', 'bool_survive']] = sample[
+            ['bool_adds', 'bool_dels', 'bool_reins', 'bool_survive']].astype(bool)
+        
+        # Survival states for all actions.
+        adds_actions = self._action_survival(sample, 'bool_adds')
+        dels_actions = self._action_survival(sample, 'bool_dels')
+        reins_actions = self._action_survival(sample, 'bool_reins')
+        
+        return adds_actions, dels_actions, reins_actions
+        
     def _odd_true(self, number):
         """
         """
@@ -53,7 +126,7 @@ class TokensManager:
         actions.loc[intercept_mask, 'survive'] = 0
     
     
-    def token_survive(self):
+    def token_survive_loop(self):
         """
         """
         # Add actions.
