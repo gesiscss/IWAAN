@@ -15,10 +15,11 @@ class ConflictManager:
         revisions (pd.DataFrame): Revisions as per received through the Wikiwho Actions API
     """
 
-    def __init__(self, all_content, revisions, include_stopwords=False):
+    def __init__(self, all_content, revisions,lng, include_stopwords=False):
         self.all_content = all_content
         self.revisions = self.prepare_revisions(revisions)
         self.include_stopwords = include_stopwords
+        self.lng = lng
 
     def calculate(self):
 
@@ -97,10 +98,15 @@ class ConflictManager:
         """
         return actions[actions.duplicated(subset=['token_id'], keep=False)]
 
-    def remove_stopwords(self, actions, stopwords_fn='data/stopword_list.txt'):
+    def remove_stopwords(self, actions):
         """Open a list of stop words and remove from the dataframe the tokens that 
         belong to this list.
         """
+        if self.lng == 'en':
+            stopwords_fn='data/stopword_list.txt'
+        elif self.lng == 'de':
+            stopwords_fn='data/stopword_list_de.txt'
+            
         stop_words = open(stopwords_fn, 'r').read().split()
         return actions[~actions['token'].isin(stop_words)]
 

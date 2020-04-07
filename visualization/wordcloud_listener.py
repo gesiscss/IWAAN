@@ -8,6 +8,7 @@ from ipywidgets import Output
 from .wordclouder import WordClouder
 
 from metrics.token import TokensManager
+from metrics.conflict import ConflictManager
 
 
 class WCListener():
@@ -63,22 +64,16 @@ class WCListener():
 
 class WCActionsListener():
     
-    def __init__(self, sources, token_source, lng, max_words=100):
-        self.sources = sources
+    def __init__(self, sources, lng, max_words=100):
         self.max_words = max_words
-        self.token_source = token_source
+        self.sources = sources
         self.lng=lng
         self._range1 = 0
         self._range2 = 1
         self.adds = None
         self.dels = None
         self.reins = None
-                
-        self.token_calculator = TokensManager(self.token_source, maxwords=self.max_words)
-        display(md('Check survival states for all actions...'))
-        self.add_actions, self.del_actions, self.rein_actions = self.token_calculator.token_survive()
-        display(md('Done!'))
-        clear_output()
+        
                         
     def revid_selection_change(self, change):
         with self.out2:
@@ -115,22 +110,34 @@ class WCActionsListener():
             self.qgrid_selected_token.observe(self.revid_selection_change, names=['_selected_rows'])
 
     
-    def listen(self, _range1, _range2, source, action):
+    def listen(self, _range1, _range2, action, stopwords):
+        """
+        """
+        # Get source data.
+        if stopwords == 'Not included':
+            conflict_calculator = ConflictManager(self.sources['All content'], self.sources['Revisions'], lng=self.lng)
+        else:
+            conflict_calculator = ConflictManager(self.sources['All content'], self.sources['Revisions'], lng=self.lng, include_stopwords=True)
+        conflict_calculator.calculate()
+        clear_output()
+        self.token_source = conflict_calculator.all_actions.copy()
+        
+        self.token_calculator = TokensManager(self.token_source, maxwords=self.max_words)
+        display(md('Check survival states for all actions...'))
+        self.add_actions, self.del_actions, self.rein_actions = self.token_calculator.token_survive()
+        display(md('Done!'))
+        clear_output()
         
         # For tokens.
         df_token = (self.token_source).copy()
         
         #token_calculator = TokensManager(df_token, maxwords=self.max_words)        
-        if (self._range1 != _range1) | (self._range2 != _range2):
-            self._range1 = copy.copy(_range1)
-            self._range2 = copy.copy(_range2)
-            self.adds = self.add_actions[(self.add_actions['rev_time'].dt.date >= _range1) & (self.add_actions['rev_time'].dt.date <= _range2)]
-            self.dels = self.del_actions[(self.del_actions['rev_time'].dt.date >= _range1) & (self.del_actions['rev_time'].dt.date <= _range2)]
-            self.reins = self.rein_actions[(self.rein_actions['rev_time'].dt.date >= _range1) & (self.rein_actions['rev_time'].dt.date <= _range2)]
-            self.ranged_token = df_token[(df_token['rev_time'].dt.date >= _range1) & (df_token['rev_time'].dt.date <= _range2)]
-            
-        else:
-            pass
+        self._range1 = copy.copy(_range1)
+        self._range2 = copy.copy(_range2)
+        self.adds = self.add_actions[(self.add_actions['rev_time'].dt.date >= _range1) & (self.add_actions['rev_time'].dt.date <= _range2)]
+        self.dels = self.del_actions[(self.del_actions['rev_time'].dt.date >= _range1) & (self.del_actions['rev_time'].dt.date <= _range2)]
+        self.reins = self.rein_actions[(self.rein_actions['rev_time'].dt.date >= _range1) & (self.rein_actions['rev_time'].dt.date <= _range2)]
+        self.ranged_token = df_token[(df_token['rev_time'].dt.date >= _range1) & (df_token['rev_time'].dt.date <= _range2)]
         
         tokens_action_no_ratio = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins, ratio=False)
         
@@ -187,6 +194,7 @@ class WCActionsListener():
             #return qgrid_token_obj
         else:
             display(md('**There are no words to build the table.**'))
+            
             
 
         
