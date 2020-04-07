@@ -106,6 +106,8 @@ class ConflictManager:
             stopwords_fn='data/stopword_list.txt'
         elif self.lng == 'de':
             stopwords_fn='data/stopword_list_de.txt'
+        else:
+            stopwords_fn='data/stopword_list.txt'
             
         stop_words = open(stopwords_fn, 'r').read().split()
         return actions[~actions['token'].isin(stop_words)]
