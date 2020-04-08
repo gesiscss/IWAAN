@@ -40,11 +40,12 @@ class TopicsListener():
         self.talk_content['action_type'] = self.talk_content.comment.apply(lambda x: self.get_action_type(x) if not pd.isna(x) else None)
 
         #group by talk topics
-        topic_df = self.talk_content.groupby(by="topics").count().sort_values('user', ascending=False)
+        #topic_df = self.talk_content.groupby(by="topics").count().sort_values('user', ascending=False)
 
         #keeping only necessary columns for display
-        topic_df = topic_df.drop(topic_df.columns.difference(['user']), axis=1).rename(columns = {
-                    'user': 'counts'})
+        topic_df = self.talk_content.drop(self.talk_content.columns.difference(['revid','user', 'year_month', 'topics', 'action_type']), axis=1)
+        topic_df = topic_df[topic_df['topics'].notnull()].set_index('topics')
+        
         return topic_df
 
     def listen(self, begin, end, granularity):
