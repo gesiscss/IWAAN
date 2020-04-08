@@ -24,16 +24,20 @@ class TalksListener():
         data = [
             graph_objs.Scatter(
                 x=groupped_df['year_month'], y=groupped_df["comment"],
-                marker=dict(color='rgba(0, 0, 0, 1)'))
+                marker=dict(color='rgba(0, 0, 0, 1)'), hovertemplate ='%{x}<extra>%{y}</extra>')
         ]
+        if granularity[0] == "D":
+            tickformat = "%Y-%m-%d"
+        else:
+            tickformat = "%b %Y"
 
         layout = graph_objs.Layout(hovermode='closest',
-                                   xaxis=dict(title=granularity, ticklen=5,
-                                              zeroline=True, gridwidth=2),
-                                   yaxis=dict(title='Comments',
-                                              ticklen=5, gridwidth=2),
-                                   legend=dict(x=0.5, y=1.2),
-                                   showlegend=False, barmode='group')
+                           xaxis=dict(title="Daily", ticklen=5,
+                                      zeroline=True, gridwidth=2, tickformat = tickformat),
+                           yaxis=dict(title='Comments',
+                                      ticklen=5, gridwidth=2),
+                           legend=dict(x=0.5, y=1.2),
+                           showlegend=False, barmode='group')
 
 
 

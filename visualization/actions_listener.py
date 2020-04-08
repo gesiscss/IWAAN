@@ -47,6 +47,7 @@ class ActionsListener():
                 x=df['year_month'], y=df[green],
                 name=green,
                 marker=dict(color='rgba(0, 128, 43, 1)')))
+        
 
         self.df_plotted = df
 
