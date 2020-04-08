@@ -11,6 +11,10 @@ class TalksListener():
     def __init__(self, df):
         self.df = df
         self.df_plotted = None
+    
+   
+
+
 
     def listen(self, begin, end, granularity):
         df = self.df

@@ -221,7 +221,7 @@ class WikipediaAPI(API):
         return self.request(url)
     
     def get_talk_content(self, pageid: Union[int, str]) -> dict:
-        url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|user|comment&pageids={pageid}'
+        url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|ids|user|comment&pageids={pageid}'
 
         return self.request(url)
 
