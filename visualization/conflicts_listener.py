@@ -78,7 +78,7 @@ class ConflictsListener():
                                    yaxis=dict(
                                        ticklen=5, gridwidth=2, range=_range),
                                    legend=dict(x=0.5, y=1.2),
-                                   showlegend=True, barmode='group', bargap=0.75)
+                                   showlegend=True, barmode='group', bargap=0.9)
 
         self.df_plotted = df
 
