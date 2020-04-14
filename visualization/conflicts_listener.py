@@ -1,7 +1,13 @@
 import pandas as pd
 import numpy as np
+import qgrid
 import plotly
 from plotly import graph_objs
+from IPython.display import display, Markdown as md, clear_output, HTML
+from ipywidgets import Output
+from utils.notebooks import get_previous_notebook
+
+from metrics.conflict import ConflictManager
 
 
 class ConflictsListener():
@@ -152,3 +158,46 @@ class ConflictsListener():
         )
 
         return df
+    
+    
+    
+class ConflictsActionListener():
+    
+    def __init__(self, sources, lng):
+        self.sources=sources
+        self.lng = lng
+        
+    def listen(self, stopwords):
+        
+        # Get source data. 
+        if stopwords == 'Not included':
+            cp_all = self.sources['All content'].copy()
+            cp_revisions = self.sources['Revisions'].copy()
+            conflict_calculator = ConflictManager(cp_all, cp_revisions, lng=self.lng)
+        else:
+            cp_all = self.sources['All content'].copy()
+            cp_revisions = self.sources['Revisions'].copy()
+            conflict_calculator = ConflictManager(cp_all, cp_revisions, lng=self.lng, include_stopwords=True)
+            
+        conflict_calculator.calculate()
+        self.conflict_calculator = conflict_calculator
+        clear_output()
+
+        # display the tokens, the difference in seconds and its corresponding conflict score
+        conflicts = conflict_calculator.conflicts.copy()
+        conflicts['time_diff_secs'] = conflicts['time_diff'].dt.total_seconds()
+        self.only_conflicts = conflicts
+
+        if len(conflicts) > 0:
+            conflicts_for_grid = conflicts[[
+                'action', 'token', 'token_id', 'rev_id', 
+                'editor', 'time_diff_secs', 'conflict']].rename(columns={
+                'editor': 'editor_id'}).sort_values('conflict', ascending=False)
+            conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(str)
+            conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(str)
+            conflicts_for_grid.set_index('token_id', inplace=True)
+            self.df_for_grid = conflicts_for_grid
+            display(qgrid.show_grid(self.df_for_grid))
+        else:
+            display(md(f'**There are no conflicting tokens in this page.**'))
+            display(HTML(f'<a href="{get_previous_notebook()}" target="_blank">Go back to the previous workbook</a>'))
