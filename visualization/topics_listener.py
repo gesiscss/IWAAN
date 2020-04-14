@@ -4,6 +4,7 @@ import plotly
 #import plotly.plotly as py
 from plotly import graph_objs
 import re
+from external.wikipedia import WikipediaDV, WikipediaAPI
 #from wordcloud import WordCloud
 
 
@@ -14,7 +15,7 @@ class TopicsListener():
         self.df_plotted = None
     
     def find_topic(self,comment):
-        if re.search('\/\*(.+?)\*\/', comment) and 'Signing' not in comment:
+        if re.search('\/\*\s(.+?)\s\*\/', comment) and 'Signing' not in comment:
             return (re.search('\/\*(.+?)\*\/', comment).group(1))
         else:
             pass
@@ -34,11 +35,11 @@ class TopicsListener():
         return action_type
 
     #extract topics and action_types
-    def extract_topics(self):
+    def extract_topics(self, wikipediadv_ins):
         self.talk_content = self.df
         self.talk_content['topics'] = self.talk_content.comment.apply(lambda x: self.find_topic(x) if not pd.isna(x) else None)
+        self.extract_null_content(wikipediadv_ins)
         self.talk_content['action_type'] = self.talk_content.comment.apply(lambda x: self.get_action_type(x) if not pd.isna(x) else None)
-
         #group by talk topics
         #topic_df = self.talk_content.groupby(by="topics").count().sort_values('user', ascending=False)
 
@@ -47,6 +48,27 @@ class TopicsListener():
         topic_df = topic_df[topic_df['topics'].notnull()].set_index('topics')
         
         return topic_df
+    
+    #for those revisions that have null comment, we extract diff using wikipedia api
+    def extract_null_content(self, wikipediadv_ins):
+        # setting empty dataframe
+        self.talk_diff = pd.DataFrame(columns=['fromid', 'fromrevid', 'fromns', 'fromtitle', 'toid', 'torevid', 'tons', 'totitle', 'content'])
+
+        null_topic = self.talk_content[self.talk_content['comment']==""]
+        #iterrating over empty revision content
+        for i, row in null_topic.iterrows():
+            torev = row['revid']
+            fromrev = self.talk_content.iloc[i+1]['revid']
+            #appending diff content
+            self.talk_diff = self.talk_diff.append(wikipediadv_ins.get_talk_rev_diff(fromrev=fromrev, torev=torev), ignore_index=True)
+        
+        self.talk_diff = self.talk_diff.rename(columns={"*":"comment"})
+        
+        #iterrating over comments 
+        for comment in self.talk_diff['comment']:
+            if re.search('==(.+?)==', comment):
+                rev_id = self.talk_diff.loc[self.talk_diff['comment']==comment,'torevid']
+                self.talk_content.loc[self.talk_content['revid']==int(rev_id), 'topics'] = re.search('==(.+?)==', comment).group(0)[2:-2]
 
     def listen(self, begin, end, granularity):
         df = self.df
