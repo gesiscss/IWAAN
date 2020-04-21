@@ -105,6 +105,20 @@ class WikipediaDV(DataView):
                'users'] for chunk in chunks(editors, 50))
 
         return pd.DataFrame(x for x in chain(*res))
+    
+    def get_talk_content(self, pageid: Union[int, str]) -> pd.Series:
+
+        res = self.api.get_talk_content(pageid) 
+        talk_content = next(iter(res["query"]["pages"].values()))
+
+        return pd.DataFrame(talk_content["revisions"])
+    
+    def get_talk_rev_diff(self, fromrev, torev) -> pd.Series:
+
+        res = self.api.get_talk_rev_diff(fromrev, torev) 
+        talk_diff = pd.Series(next(iter(res.values()))).rename(columns={"*":"content"})
+
+        return talk_diff
 
 
 class WikipediaAPI(API):
@@ -210,5 +224,15 @@ class WikipediaAPI(API):
             url = f'{self.base}action=query&list=users&ususerids={editors_str}&usprop=blockinfo|editcount|registration|gender&format=json'
         elif isinstance(editors[0], str):
             url = f'{self.base}action=query&list=users&ususers={editors_str}&usprop=blockinfo|editcount|registration|gender&format=json'
+
+        return self.request(url)
+    
+    def get_talk_content(self, pageid: Union[int, str]) -> dict:
+        url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|ids|user|comment&pageids={pageid}'
+
+        return self.request(url)
+    
+    def get_talk_rev_diff(self, fromrev, torev) -> dict:
+        url = f'{self.base}action=compare&format=json&fromrev={fromrev}&torev={torev}'
 
         return self.request(url)

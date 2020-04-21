@@ -12,7 +12,7 @@ from metrics.conflict import ConflictManager
 
 class ConflictsListener():
 
-    def __init__(self, df):
+    def __init__(self, df, bargap=None):
 
         # time diff to seconds
         #df['diff_secs'] = df['time_diff'].dt.total_seconds()
@@ -23,6 +23,7 @@ class ConflictsListener():
 
         self.df = df
         self.df_plotted = None
+        self.bargap = bargap
 
     def listen(self, _range1, _range2, granularity, black, red):
         df = self.df
@@ -71,14 +72,23 @@ class ConflictsListener():
         #         x=list(df['rev_time']), y=list(df[green]),
         #         name=green,
         #         marker=dict(color='rgba(0, 153, 255, .8)')))
-
-        layout = graph_objs.Layout(hovermode='closest',
-                                   xaxis=dict(title=granularity, ticklen=5,
-                                              zeroline=True, gridwidth=2),
-                                   yaxis=dict(
-                                       ticklen=5, gridwidth=2, range=_range),
-                                   legend=dict(x=0.5, y=1.2),
-                                   showlegend=True, barmode='group', bargap=0.9)
+        
+        if self.bargap == None:
+            layout = graph_objs.Layout(hovermode='closest',
+                                       xaxis=dict(title=granularity, ticklen=5,
+                                                  zeroline=True, gridwidth=2),
+                                       yaxis=dict(
+                                           ticklen=5, gridwidth=2, range=_range),
+                                       legend=dict(x=0.5, y=1.2),
+                                       showlegend=True, barmode='group')
+        else:
+            layout = graph_objs.Layout(hovermode='closest',
+                                       xaxis=dict(title=granularity, ticklen=5,
+                                                  zeroline=True, gridwidth=2),
+                                       yaxis=dict(
+                                           ticklen=5, gridwidth=2, range=_range),
+                                       legend=dict(x=0.5, y=1.2),
+                                       showlegend=True, barmode='group', bargap=self.bargap)
 
         self.df_plotted = df
 
