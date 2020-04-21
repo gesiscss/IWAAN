@@ -27,7 +27,7 @@ class TalksListener():
 
         data = [
             graph_objs.Scatter(
-                x=groupped_df['year_month'], y=groupped_df["comment"],
+                x=groupped_df['year_month'].dt.date, y=groupped_df["comment"],
                 marker=dict(color='rgba(0, 0, 0, 1)'), hovertemplate ='%{x}<extra>%{y}</extra>')
         ]
         if granularity[0] == "D":
