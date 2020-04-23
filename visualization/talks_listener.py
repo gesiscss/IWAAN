@@ -36,7 +36,7 @@ class TalksListener():
             tickformat = "%b %Y"
 
         layout = graph_objs.Layout(hovermode='closest',
-                           xaxis=dict(title="Daily", ticklen=5,
+                           xaxis=dict(title=granularity, ticklen=5,
                                       zeroline=True, gridwidth=2, tickformat = tickformat),
                            yaxis=dict(title='Comments',
                                       ticklen=5, gridwidth=2),
