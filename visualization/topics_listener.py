@@ -44,15 +44,14 @@ class TopicsListener():
         
         #removing those topics that were untouched
         topics = self.talk_content.topics.value_counts()
-        self.talk_content = self.talk_content[self.talk_content['topics'].isin(topics.index[topics>1])]
+        #self.talk_content = self.talk_content[self.talk_content['topics'].isin(topics.index[topics>1])]
         self.df = self.talk_content
 
 
         #keeping only necessary columns for display
-        topic_df = self.talk_content.drop(self.talk_content.columns.difference(['revid','user', 'year_month', 'topics', 'action_type']), axis=1)
-        topic_df = topic_df[topic_df['topics'].notnull()].set_index('topics')
-        
-        return topic_df
+        self.topic_df = self.talk_content.drop(self.talk_content.columns.difference(['revid','user', 'year_month', 'topics', 'action_type']), axis=1)
+        self.topic_df = self.topic_df[self.topic_df['topics'].notnull()].set_index('topics')
+        return self.topic_df
     
     #for those revisions that have null comment, we extract diff using wikipedia api
     def extract_null_content(self, wikipediadv_ins):
@@ -71,38 +70,47 @@ class TopicsListener():
                 self.talk_diff = self.talk_diff.append(wikipediadv_ins.get_talk_rev_diff(fromrev=fromrev, torev=torev), ignore_index=True)
         
         self.talk_diff = self.talk_diff.rename(columns={"*":"comment"})
-        
+        if len(self.talk_diff) > 0:
         #iterrating over comments 
-        for comment in self.talk_diff['comment']:
-            if re.search('==(.+?)==', comment):
-                rev_id = self.talk_diff.loc[self.talk_diff['comment']==comment,'torevid']
-                self.talk_content.loc[self.talk_content['revid']==int(rev_id), 'topics'] = re.search('==(.+?)==', comment).group(0)[2:-2]
+            for comment in self.talk_diff['comment']:
+                if re.search('==(.+?)==', comment):
+                    rev_id = self.talk_diff.loc[self.talk_diff['comment']==comment,'torevid']
+                    self.talk_content.loc[self.talk_content['revid']==int(rev_id), 'topics'] = re.search('==(.+?)==', comment).group(0)[2:-2]
+                    
+    def translusion(self, wikipedia_dv):
+    #adding content from transcluded page
+
+        #getting topics of revisions on transcluded page
+        transcluded_topic_df = self.extract_topics(wikipedia_dv).reset_index()
+        transcluded_topic_df['topics'] = transcluded_topic_df['topics'].apply(lambda x: x if 'GA Review' in x else 'GA Review: ' + x)
+        return transcluded_topic_df
+
 
     def listen(self, begin, end, granularity):
-        df = self.df
+        df = self.topic_df.reset_index()
         
         filtered_df = df[(df.year_month.dt.date >= begin) & (df.year_month.dt.date <= end)]
         groupped_df = filtered_df.groupby([pd.Grouper(key='year_month', freq=granularity[0]), pd.Grouper(key='topics')]).count().reset_index()
-
-        # Plot Graph
         
-
-        data = []
-        topic_count = filtered_df.groupby(by="topics").count().sort_values('user', ascending=False)
         #displaying top 10 topics that have more than 5 edits (or just top 10)
+        topic_count = filtered_df.groupby(by="topics").count().sort_values('user', ascending=False)
         topic_count_top = topic_count.iloc[0:10].reset_index()
+        
         if granularity[0] == 'Y':
             groupped_df['year_month'] = groupped_df['year_month'].dt.year
         elif granularity[0] == 'M':
             groupped_df['year_month'] = groupped_df['year_month'].dt.strftime('%Y-%m')
         else:
             groupped_df['year_month'] = groupped_df['year_month'].dt.date
+            
+        # Plot Graph
+        data = []
         for topic in topic_count_top.topics:
             if topic != "":
                 data.append(
                         graph_objs.Bar(
                             x=groupped_df[groupped_df['topics'] == topic]['year_month'], 
-                            y=groupped_df[groupped_df['topics'] == topic]['comment'], name=topic
+                            y=groupped_df[groupped_df['topics'] == topic]['user'], name=topic
                             )
                 )
         layout = graph_objs.Layout(hovermode='closest',
