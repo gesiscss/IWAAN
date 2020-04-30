@@ -13,6 +13,7 @@ class TopicsListener():
     def __init__(self, df):
         self.df = df
         self.df_plotted = None
+        
     
     def find_topic(self,comment):
         if re.search('\/\*\s(.+?)\s\*\/', comment) and 'Signing' not in comment:
@@ -45,8 +46,15 @@ class TopicsListener():
         #removing those topics that were untouched
         topics = self.talk_content.topics.value_counts()
         #self.talk_content = self.talk_content[self.talk_content['topics'].isin(topics.index[topics>1])]
+       
+        tp = self.talk_content[self.talk_content['topics'].isin(topics.index[topics==1])]
+        for i, row in tp.iterrows():
+            if i!= len(self.talk_content)-1:
+                next_comment = self.talk_content.loc[i+1, 'comment']
+                regex = re.compile('\w*revert|removed|Remove|rvv|zurückgesetzt\w*')
+                if regex.search(next_comment):
+                    self.talk_content.drop(i)
         self.df = self.talk_content
-
 
         #keeping only necessary columns for display
         self.topic_df = self.talk_content.drop(self.talk_content.columns.difference(['revid','user', 'year_month', 'topics', 'action_type']), axis=1)
