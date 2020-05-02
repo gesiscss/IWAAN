@@ -14,4 +14,3 @@ jupyter trust 6.\ General\ metadata\ of\ the\ editor.ipynb
 jupyter nbextension enable hide_input_all/main
 jupyter nbextension enable hide_input/main
 jupyter nbextension enable exercise2/main
-
