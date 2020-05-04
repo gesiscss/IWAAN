@@ -6,7 +6,7 @@ import qgrid
 
 class TemplateListener():
     
-    def __init__(self, all_actions, templates=["Featured Article", "Good Article"]):
+    def __init__(self, all_actions, templates=["Featured Article", "Good Article", "Disputed", "POV", "NPOV", "Neutrality"]):
         self.df = all_actions
         self.templates = templates
         self.tl = [tl.lower().split()[0] for tl in templates]
@@ -105,7 +105,12 @@ class TemplateListener():
             display(md("The following revisions are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
-                ff.create_gantt(plot_revs, colors={self.templates[0]:'#056ded', self.templates[1]:'#d9331c'}, 
+                ff.create_gantt(plot_revs, colors={self.templates[0]:'#056ded',
+                                       self.templates[1]:'#d9331c',
+                                       self.templates[2]:'#ff0505',
+                                       self.templates[3]:'#5cdb9a',
+                                       self.templates[4]:'#5cdb9a',
+                                       self.templates[5]:'#5cdb9a'           }, 
                            showgrid_x=True, showgrid_y=True, bar_width=0.1, group_tasks=True, 
                            index_col='Resource', show_colorbar=False))
         else:
