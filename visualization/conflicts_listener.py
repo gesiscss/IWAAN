@@ -196,15 +196,20 @@ class ConflictsActionListener():
         # display the tokens, the difference in seconds and its corresponding conflict score
         conflicts = conflict_calculator.conflicts.copy()
         conflicts['time_diff_secs'] = conflicts['time_diff'].dt.total_seconds()
+        conflicts = conflicts.rename(columns={"editor":'editor_id'})
+        conflicts['editor_id'] = conflicts['editor_id'][conflicts['editor_id'].notnull()].apply(lambda x: x if str(x)[0] == '0' else np.int64(x))
+        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(conflicts, right_index=True, on='editor_id', how='outer')
+        conflicts = conflicts_merged[conflicts_merged['token'].notnull()]
         self.only_conflicts = conflicts
 
         if len(conflicts) > 0:
             conflicts_for_grid = conflicts[[
                 'action', 'token', 'token_id', 'rev_id', 
-                'editor', 'time_diff_secs', 'conflict']].rename(columns={
-                'editor': 'editor_id'}).sort_values('conflict', ascending=False)
-            conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(str)
-            conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(str)
+                'editor_id','name', 'time_diff_secs', 'rev_time', 'conflict']].rename(columns={
+                'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
+            conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(int).astype(str)
+            conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(int).astype(str)
+            conflicts_for_grid['editor_id'] = conflicts_for_grid['editor_id'].astype(str)
             conflicts_for_grid.set_index('token_id', inplace=True)
             self.df_for_grid = conflicts_for_grid
             display(qgrid.show_grid(self.df_for_grid))
