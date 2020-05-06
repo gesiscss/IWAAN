@@ -102,6 +102,9 @@ class ProtectListener():
         df = df.drop(["expiry", "unprotect"], axis=1)
         df = df.drop(df[df["action"] == "unprotect"].index)
         
+        if ("params" in df.columns) & ("indefinite" in df["params"].loc[0]):
+            df.loc[0, "finish"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
         return df
 
 
