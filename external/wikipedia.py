@@ -119,6 +119,17 @@ class WikipediaDV(DataView):
         talk_diff = pd.Series(next(iter(res.values()))).rename(columns={"*":"content"})
 
         return talk_diff
+    
+    def get_protection(self, page: str) -> pd.DataFrame:
+        
+        res = self.api.get_protection(page)["query"]["logevents"]
+        for i in res:
+            try:
+                i["params"] = i["params"]["description"]
+            except KeyError:
+                pass
+            
+        return pd.DataFrame(res)
 
 
 class WikipediaAPI(API):
@@ -235,4 +246,11 @@ class WikipediaAPI(API):
     def get_talk_rev_diff(self, fromrev, torev) -> dict:
         url = f'{self.base}action=compare&format=json&fromrev={fromrev}&torev={torev}'
 
+        return self.request(url)
+    
+    def get_protection(self, page: str) -> dict:
+        url1 = f'{self.base}action=query&leprop=type|user|timestamp|comment|details&list=logevents&letitle={quote_plus(page)}'
+        url2 = '&lelimit=max&letype=protect&format=json'        
+        url = url1 + url2
+            
         return self.request(url)
