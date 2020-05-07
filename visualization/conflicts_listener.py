@@ -177,6 +177,33 @@ class ConflictsActionListener():
         self.sources=sources
         self.lng = lng
         
+    def add_columns(self):
+        #time_diff_secs
+        self.conflicts['time_diff_secs'] = self.conflicts['time_diff'].dt.total_seconds()
+        #editor names
+        self.conflicts = self.conflicts.rename(columns={"editor":'editor_id'})
+        self.sources['Editors']['editor_id'] = self.sources['Editors']['editor_id'].astype(str)
+        self.conflicts['editor_id'] = self.conflicts['editor_id'].astype(str)
+        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(self.conflicts, right_index=True, on='editor_id', how='outer')
+        self.conflicts = conflicts_merged[conflicts_merged['token'].notnull()]
+        
+        #filling values for original insertions
+        original = pd.merge(self.conflicts[self.conflicts['rev_id'] == -1], self.sources['Revisions'][['rev_time', 'rev_id']],how='left', left_on='o_rev_id', right_on='rev_id')
+        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'rev_time'] = original['rev_time_y'].tolist()
+        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'editor_id'] = self.conflicts.loc[self.conflicts['rev_id'] == -1, 'o_editor']
+        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff'] = 0
+        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff_secs'] = 0
+        
+        #order and count columns
+        self.conflicts.reset_index(inplace=True)
+        self.conflicts.loc[:, 'order'] = np.nan
+        self.conflicts.loc[:, 'count'] = np.nan
+        for token_id in self.conflicts['token_id'].unique():
+            token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs')
+            self.conflicts.loc[token_df.index, 'order'] = list(range(1, len(token_df)+1))
+            self.conflicts.loc[token_df.index, 'count'] = len(token_df)
+        
+        
     def listen(self, stopwords):
         
         # Get source data. 
@@ -194,19 +221,14 @@ class ConflictsActionListener():
         clear_output()
 
         # display the tokens, the difference in seconds and its corresponding conflict score
-        conflicts = conflict_calculator.conflicts.copy()
-        conflicts['time_diff_secs'] = conflicts['time_diff'].dt.total_seconds()
-        conflicts = conflicts.rename(columns={"editor":'editor_id'})
-        conflicts['editor_id'] = conflicts['editor_id'][conflicts['editor_id'].notnull()].apply(lambda x: x if str(x)[0] == '0' else np.int64(x))
-        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(conflicts, right_index=True, on='editor_id', how='outer')
-        conflicts = conflicts_merged[conflicts_merged['token'].notnull()]
-        self.only_conflicts = conflicts
+        self.conflicts = conflict_calculator.conflicts.copy()
+        self.add_columns()
 
-        if len(conflicts) > 0:
-            conflicts_for_grid = conflicts[[
-                'action', 'token', 'token_id', 'rev_id', 
-                'editor_id','name', 'time_diff_secs', 'rev_time', 'conflict']].rename(columns={
+        if len(self.conflicts) > 0:
+            conflicts_for_grid = self.conflicts[[
+                'order', 'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'time_diff_secs', 'name', 'editor_id', 'rev_id']].rename(columns={
                 'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
+            conflicts_for_grid['timestamp'] = pd.to_datetime(conflicts_for_grid['timestamp'], cache=False).dt.date
             conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(int).astype(str)
             conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(int).astype(str)
             conflicts_for_grid['editor_id'] = conflicts_for_grid['editor_id'].astype(str)

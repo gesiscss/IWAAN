@@ -65,7 +65,7 @@ class ConflictManager:
             all_actions = self.remove_stopwords(all_actions)
 
         all_actions = self.wide_to_long(all_actions)
-        all_actions = all_actions[all_actions['rev_id'] != -1]
+        #all_actions = all_actions[all_actions['rev_id'] != -1]
         return self.merge_actions_and_revisions(all_actions, self.revisions)
 
     def get_elegible(self):
@@ -132,6 +132,7 @@ class ConflictManager:
         the time and the editor that executed the action in the token. This also returns the
         data sorted by token_id and rev_time, so it can be used to calculate time differences.
         """
+        
         return pd.merge(actions, revisions[['rev_time', 'rev_id', 'editor']],
                         how='left', on='rev_id').sort_values(['token_id', 'rev_time'])
 
