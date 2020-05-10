@@ -65,7 +65,7 @@ class ConflictManager:
             all_actions = self.remove_stopwords(all_actions)
 
         all_actions = self.wide_to_long(all_actions)
-        #all_actions = all_actions[all_actions['rev_id'] != -1]
+        all_actions = all_actions[all_actions['rev_id'] != -1]
         return self.merge_actions_and_revisions(all_actions, self.revisions)
 
     def get_elegible(self):

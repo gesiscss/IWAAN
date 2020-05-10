@@ -1,6 +1,6 @@
 import pandas as pd
 from IPython.display import display, Markdown as md
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.figure_factory as ff
 import qgrid
 import re
@@ -10,22 +10,252 @@ class ProtectListener():
     
     def __init__(self, pp_log):
         self.df = pp_log
-            
-    def get_protect(self):
+
+        
+    def get_protect(self, level="semi"):
         """"""
         if len(self.df) == 0:
             display(md("No protection records!"))
             return None, None
         
-        only_expiry = self.extract_expiry()
-        with_unprotect = self.get_unprotect()
-        final_table = self.get_final()
+        df_with_expiry = self.__get_expiry()
+        df_with_unknown = self.__check_unknown(df_with_expiry)
+        df_checked_unprotect = self.__check_unprotect(df_with_unknown)
+        df_select_level = self.__select_level(df_checked_unprotect, level=level)
+        df_with_unprotect = self.__get_unprotect(df_select_level)
+        
+        final_table = self.__get_final(df_with_unprotect)
+        plot_table = self.__get_plot(final_table, level=level)
+                
+        return final_table, plot_table
+        
+        
+    def __regrex1(self, captured_content):
+        reg0 = re.findall('\[(.*?)\]\ \((.*?)\)', captured_content)
+        return reg0
+
+    
+    def __regrex2(self, captured_content):
+        reg0 = re.findall('\[(.*?)\:(.*?)\]$', captured_content)
+        reg1 = re.findall('\[(.*?)\]$', captured_content)
+        if len(reg0) != 0:
+            reg0[0] = (reg0[0][0] + ":" + reg0[0][1], "indefinite")
+            return reg0
+        else:
+            reg1[0] = (reg1[0], "indefinite")
+            return reg1
+
+        
+    def __extract_date(self, date_content):
+        if not "indefinite" in date_content:
+            extract_str = re.findall('expires\ (.*?)\ \(UTC', date_content)[0]
+            return extract_str
+        else:
+            return (pd.Timestamp.max).to_pydatetime(warn=False).strftime("%H:%M, %-d %B %Y")
+        
+        
+    def __check_state(self, extract):
+        states_dict = {"autoconfirmed": 0, "expiry1": None,
+                      "sysop": 0, "expiry2": None}
+
+        len_extract = len(extract)
+        for i in range(len_extract):
+            action_tup = extract[i]
+            mask_auto = "autoconfirmed" in action_tup[0]
+            mask_sysop = "sysop" in action_tup[0]            
+
+            if mask_auto:
+                states_dict["autoconfirmed"] = int(mask_auto)
+                states_dict["expiry1"] = self.__extract_date(action_tup[1])
+
+            if mask_sysop:
+                states_dict["sysop"] = int(mask_sysop)
+                states_dict["expiry2"] = self.__extract_date(action_tup[1])
+    
+        return states_dict
+    
+    
+    def __get_expiry(self):
+        """"""
+        protect_log = (self.df).copy()
+        
+        # Convert timestamp date format.
+        protect_log["timestamp"] = protect_log["timestamp"].apply(lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ"))
+        
+        # Create an empty dict to store protection types and expiry dates.
+        expiry = {}
+        
+        # First check "params" column.
+        if "params" in protect_log.columns:
+            for idx, com in protect_log['params'].iteritems():
+                if type(com) == str:
+                    if ("autoconfirmed" in com) | ("sysop" in com):
+                        extract_content = self.__regrex1(com) if len(self.__regrex1(com)) != 0 else self.__regrex2(com)
+                        expiry[idx] = self.__check_state(extract_content)
+                    else:
+                        pass
+                else:
+                    pass
+        
+        # Then check "comment" column.
+        for idx, com in protect_log['comment'].iteritems():
+            if ("autoconfirmed" in com) | ("sysop" in com):
+                extract_content = self.__regrex1(com) if len(self.__regrex1(com)) != 0 else self.__regrex2(com)
+                expiry[idx] = self.__check_state(extract_content)
+            else:
+                pass
+        
+        # Fill expiry into the dataframe.
+        for k, v in expiry.items():
+            protect_log.loc[k, "autoconfirmed"] = v["autoconfirmed"]
+
+            if v["expiry1"] != None:
+                try:
+                    protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %d %B %Y")
+                except:
+                    protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %B %d, %Y")
+
+            protect_log.loc[k, "sysop"] = v["sysop"]
+
+            if v["expiry2"] != None:
+                try:
+                    protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %d %B %Y")
+                except:
+                    protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %B %d, %Y")
+        
+        return protect_log
+    
+    
+    def __check_unknown(self, protect_log):
+        """"""
+        mask_unknown_auto = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed"].isnull())
+        mask_unknown_sys = (protect_log["action"] != "unprotect") & (protect_log["sysop"].isnull())
+        mask_unknown = (mask_unknown_auto & mask_unknown_sys)
+        protect_log.loc[mask_unknown_auto, "autoconfirmed"] = 0
+        protect_log.loc[mask_unknown_sys, "sysop"] = 0
+        protect_log.loc[mask_unknown, "unknown"] = 1
+        
+        # Delete move action.
+        protect_log = protect_log.drop(protect_log[protect_log["action"] == "move_prot"].index).reset_index(drop=True)
+        
+        # Fill non-unknown with 0.
+        protect_log["unknown"] = protect_log["unknown"].fillna(0)
+        
+        return protect_log
+
+    
+    def __check_unprotect(self, protect_log):
+        """"""        
+        idx_unprotect = protect_log[protect_log["action"] == "unprotect"].index
+        for col_name in ["autoconfirmed", "sysop", "unknown"]:
+            for idx in reversed(idx_unprotect):
+                if protect_log[col_name].loc[idx + 1] == 1:
+                    protect_log.loc[idx, col_name] = 1
+        
+        return protect_log
+    
+    
+    def __select_level(self, protect_log, level):
+        """'fully', 'semi', 'unknown'"""
+        
+        protect_log[["autoconfirmed", "sysop"]] = protect_log[["autoconfirmed", "sysop"]].fillna(2)
+        protect_auto = protect_log[protect_log["autoconfirmed"] == 1]  # Semi-protected
+        protect_sys = protect_log[protect_log["sysop"] == 1]  # Fully-protected
+        protect_unknown = protect_log[protect_log["unknown"] == 1]  # Unknown 
+
+        if level == "semi":
+            protect_table = protect_auto.copy()
+            if "expiry1" in protect_table.columns:
+                try:
+                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry2", "unknown"], 
+                                                       axis=1).rename({"expiry1": "expiry"}, axis=1)
+                except KeyError:
+                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "unknown"], axis=1).rename({"expiry1": "expiry"}, axis=1)
+            else:
+                protect_table["expiry"] = pd.NaT
+
+
+        elif level == "fully":
+            protect_table = protect_sys.copy()
+            if "expiry2" in protect_table.columns:
+                try:
+                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry1", "unknown"], 
+                                                       axis=1).rename({"expiry2": "expiry"}, axis=1)
+                except KeyError:        
+                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "unknown"], axis=1).rename({"expiry2": "expiry"}, axis=1)
+            else:            
+                protect_table["expiry"] = pd.NaT
+
+
+        elif level == "unknown":
+            protect_table = protect_unknown.copy()
+            protect_table["expiry"] = pd.NaT
+            try:
+                protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry1", "expiry2", "unknown"], axis=1)
+            except KeyError:
+                try:
+                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry1", "unknown"], axis=1)
+                except KeyError:
+                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry2", "unknown"], axis=1)
+                    
+        else:
+            raise ValueError("Please choose one level from 'semi', 'fully' and 'unknown'.")
+
+
+        protect_table = protect_table.reset_index(drop=True)
+        
+        return protect_table
+                
+                    
+    def __get_unprotect(self, protect_table):
+        """"""
+        pp_log_shift = protect_table.shift(1)
+        pp_unprotect = pp_log_shift[pp_log_shift["action"] == "unprotect"]["timestamp"]
+        
+        for idx, unprotect_date in pp_unprotect.iteritems():   
+            protect_table.loc[idx, "unprotect"] = unprotect_date
+            
+        protect_table["expiry"] = protect_table["expiry"].fillna(pd.Timestamp.max.replace(second=0))
+        try:
+            protect_table["unprotect"] = protect_table["unprotect"].fillna(pd.Timestamp.max.replace(second=0))
+        except KeyError:
+            protect_table["unprotect"] = pd.Timestamp.max
+            
+        return protect_table
+    
+    
+    def __get_final(self, protect_table):
+        """"""
+        protect_table["finish"] = protect_table[["expiry", "unprotect"]].min(axis=1).astype('datetime64[s]')
+        protect_table = protect_table.drop(["expiry", "unprotect"], axis=1)
+        protect_table = protect_table.drop(protect_table[protect_table["action"] == "unprotect"].index).reset_index(drop=True)
+        
+        inf_date = pd.Series(pd.Timestamp.max.replace(second=0)).astype('datetime64[s]').loc[0]
+        now_date = pd.Series(pd.Timestamp(datetime.now())).astype("datetime64[s]").loc[0]
+        
+        for idx, time in protect_table["finish"].iteritems():
+            if idx == 0:
+                if time == inf_date:
+                    protect_table.loc[idx, "finish"] = now_date
+            else:
+                previous_time = protect_table["finish"].loc[idx - 1]
+                mask_aos = (time - previous_time) > timedelta(days=0, hours=0, minutes=0, seconds=0)
+                if mask_aos:
+                    protect_table.loc[idx, "finish"] = previous_time
+        
+        return protect_table
+    
+    
+    def __get_plot(self, final_table, level):
+        """"""
+        # Level's name
+        levels = {"semi": "Semi-protection", "fully": "Full-protection", "unknown": "Unknown protection"}
         
         # For Gantt chart
         protect_plot = final_table[["type", "timestamp", "finish"]].rename({"type": "Task", "timestamp": "Start", "finish": "Finish"}, axis=1)
-        protect_plot["Task"] = protect_plot["Task"].replace("protect", "Protect")
+        protect_plot["Task"] = protect_plot["Task"].replace("protect", levels[level])
         protect_plot["Resource"] = protect_plot["Task"]
-        
+
         mask_null_finish = pd.isnull(protect_plot["Finish"])
         col_finish = protect_plot["Finish"].loc[mask_null_finish]
         for idx, value in col_finish.iteritems():
@@ -33,91 +263,19 @@ class ProtectListener():
                 protect_plot.loc[idx, "Finish"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             else:
                 protect_plot.loc[idx, "Finish"] = protect_plot["Start"].loc[idx - 1]
-        
-        return final_table, protect_plot
-        
-    def extract_expiry(self):
-        """"""
-        protect_log = (self.df).copy()
-        
-        # Convert timestamp to datetime.
-        protect_log["timestamp"] = protect_log["timestamp"].apply(lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ"))
-        
-        # Filter expiry date out.
-        expiry = {}
-
-        if "params" in protect_log.columns:
-            for idx, com in protect_log['params'].iteritems():
-                try:
-                    expiry[idx] = re.search('\(expires\ (.*?) \(UTC\)\)', com).group(1)
-                    expiry[idx] = datetime.strptime(expiry[idx], "%H:%M, %d %B %Y")
-                except:
-                    pass
-
-        for idx, com in protect_log['comment'].iteritems():
-            try:
-                expiry[idx] = re.search('\(expires\ (.*?) \(UTC\)\)', com).group(1)
-                try:
-                    expiry[idx] = datetime.strptime(expiry[idx], "%H:%M, %d %B %Y")
-                except:
-                    expiry[idx] = datetime.strptime(expiry[idx], "%H:%M, %B %d, %Y")
-            except:
-                pass
-
-        for k, v in expiry.items():
-            protect_log.loc[k, "expiry"] = v
-
-        # Do some check.
-        if "expiry" in protect_log.columns:
-            if protect_log["expiry"].dtype == "O":
-                raise Exception("Not all datetime type in expiry column!")
-        else:
-            protect_log["expiry"] = pd.NaT
-            
-        return protect_log
-    
                 
-    def get_unprotect(self):
-        """"""
-        df = self.extract_expiry()
-        pp_log_shift = df.shift(1)
-        pp_unprotect = pp_log_shift[pp_log_shift["action"] == "unprotect"]["timestamp"]
-        
-        for idx, unprotect_date in pp_unprotect.iteritems():   
-            df.loc[idx, "unprotect"] = unprotect_date
-            
-        df["expiry"] = df["expiry"].fillna(pd.Timestamp.max)
-        try:
-            df["unprotect"] = df["unprotect"].fillna(pd.Timestamp.max)
-        except KeyError:
-            df["unprotect"] = pd.Timestamp.max
-            
-        return df
+        return protect_plot
+
     
     
-    def get_final(self):
-        """"""
-        df = self.get_unprotect()
-        df["finish"] = df[["expiry", "unprotect"]].min(axis=1).replace(pd.Timestamp.max, pd.NaT)
-        df = df.drop(["expiry", "unprotect"], axis=1)
-        df = df.drop(df[df["action"] == "unprotect"].index)
-        
-        if ("params" in df.columns) & ("indefinite" in df["params"].loc[0]):
-            df.loc[0, "finish"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        return df
-
-
-
 class TemplateListener():
     
-    def __init__(self, all_actions, protect_logs, templates=["Featured Article", "Good Article", "Disputed", "POV", "NPOV", "Neutrality"]):
+    def __init__(self, all_actions, protection_plot, templates=["Featured Article", "Good Article", "Disputed", "POV", "NPOV", "Neutrality"]):
         self.df = all_actions
         self.templates = templates
         self.tl = [tl.lower().split()[0] for tl in templates]
         
-        protect_instance = ProtectListener(protect_logs)
-        self.protect, self.plot_protect = protect_instance.get_protect()
+        self.plot_protect = protection_plot
                 
     def get_adjacent(self, tl):
         """Label adjacent '{{' and template name."""
@@ -222,7 +380,9 @@ class TemplateListener():
                                        self.templates[3]:'#5cdb9a',
                                        self.templates[4]:'#5cdb9a',
                                        self.templates[5]:'#5cdb9a',
-                                       "Protect":'#939996'}, 
+                                       "Semi-protection":'#939996',
+                                       "Full-protection":'#939996',
+                                       "Unknown protection":'#939996'}, 
                            showgrid_x=True, showgrid_y=True, bar_width=0.1, group_tasks=True, 
                            index_col='Resource', show_colorbar=False))
         else:
@@ -231,10 +391,4 @@ class TemplateListener():
         
         
         self.plot = plot_revs
-        
-            
-        
-        
-        
-        
         
