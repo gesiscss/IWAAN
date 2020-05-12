@@ -179,10 +179,8 @@ class ConflictsActionListener():
         
     def add_columns(self):
         #time_diff_secs
-        print('Adding time_diff')
         self.conflicts['time_diff_secs'] = self.conflicts['time_diff'].dt.total_seconds()
         #editor names
-        print('Adding editor names')
         self.conflicts = self.conflicts.rename(columns={"editor":'editor_id'})
         self.sources['Editors']['editor_id'] = self.sources['Editors']['editor_id'].astype(str)
         self.conflicts['editor_id'] = self.conflicts['editor_id'].astype(str)
@@ -190,7 +188,6 @@ class ConflictsActionListener():
         self.conflicts = conflicts_merged[conflicts_merged['token'].notnull()].copy()
         
         #filling values for original insertions
-        print('Adding values for original insertions')
         original = pd.merge(self.conflicts[self.conflicts['rev_id'] == -1], self.sources['Revisions'][['rev_time', 'rev_id']],how='left', left_on='o_rev_id', right_on='rev_id')
         self.conflicts.loc[self.conflicts['rev_id'] == -1, 'rev_time'] = original['rev_time_y'].tolist()
         self.conflicts.loc[self.conflicts['rev_id'] == -1, 'editor_id'] = self.conflicts.loc[self.conflicts['rev_id'] == -1, 'o_editor']
@@ -201,7 +198,6 @@ class ConflictsActionListener():
         self.conflicts.reset_index(inplace=True)
         self.conflicts.loc[:, 'order'] = np.nan
         self.conflicts.loc[:, 'count'] = np.nan
-        print('Adding count and order')
         for token_id in self.conflicts['token_id'].unique():
             token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs').copy()
             self.conflicts.loc[token_df.index, 'order'] = list(range(1, len(token_df)+1))
@@ -209,7 +205,8 @@ class ConflictsActionListener():
         clear_output()
         
         
-    def process_data(self, stopwords):
+    
+    def listen(self, stopwords, _range1, _range2):
         if stopwords == 'Not included':
             cp_all = self.sources['All content'].copy()
             cp_revisions = self.sources['Revisions'].copy()
@@ -226,8 +223,6 @@ class ConflictsActionListener():
         # display the tokens, the difference in seconds and its corresponding conflict score
         self.conflicts = conflict_calculator.conflicts.copy()
         self.add_columns()
-    
-    def listen(self, _range1, _range2):
 
         if len(self.conflicts) > 0:
             conflicts_for_grid = self.conflicts[[
