@@ -236,7 +236,6 @@ class ConflictsActionListener():
             conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(int).astype(str)
             conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(int).astype(str)
             conflicts_for_grid['editor_id'] = conflicts_for_grid['editor_id'].astype(str)
-            conflicts_for_grid = 
             conflicts_for_grid.set_index('token_id', inplace=True)
             self.df_for_grid = conflicts_for_grid.loc[conflicts_for_grid['string']!='<!--'].copy()
             qgrid_token_obj = qgrid.show_grid(self.df_for_grid,grid_options={'forceFitColumns':False})
