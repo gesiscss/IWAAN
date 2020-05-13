@@ -195,14 +195,17 @@ class ConflictsActionListener():
         self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff_secs'] = 0
         
         #order and count columns
-        self.conflicts.reset_index(inplace=True)
-        self.conflicts.loc[:, 'order'] = np.nan
-        self.conflicts.loc[:, 'count'] = np.nan
-        for token_id in self.conflicts['token_id'].unique():
-            token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs').copy()
-            self.conflicts.loc[token_df.index, 'order'] = list(range(1, len(token_df)+1))
-            self.conflicts.loc[token_df.index, 'count'] = len(token_df)
-        clear_output()
+        #self.conflicts.reset_index(inplace=True)
+        counts = self.conflicts[['token_id', 'token']].groupby(['token_id']).count()
+        self.conflicts = counts.merge(self.conflicts, right_index=True, on='token_id', how='outer').rename(columns = {'token_x':'count','token_y':'token'}).reset_index()
+
+
+        
+        
+#         for token_id in self.conflicts['token_id'].unique():
+#             token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs').copy()
+#             self.conflicts.loc[token_df.index, 'order'] = list(range(1, len(token_df)+1))
+#             self.conflicts.loc[token_df.index, 'count'] = len(token_df)
         
         
     
@@ -226,7 +229,7 @@ class ConflictsActionListener():
 
         if len(self.conflicts) > 0:
             conflicts_for_grid = self.conflicts[[
-                'order', 'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'time_diff_secs', 'name', 'editor_id', 'rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
+                'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'time_diff_secs', 'name', 'editor_id', 'rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
             conflicts_for_grid['timestamp'] = pd.to_datetime(conflicts_for_grid['timestamp'], cache=False, utc=True).dt.date
             conflicts_for_grid = conflicts_for_grid[(conflicts_for_grid.timestamp >= _range1) &
                 (conflicts_for_grid.timestamp <= _range2)]
