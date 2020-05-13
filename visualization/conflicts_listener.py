@@ -173,9 +173,22 @@ class ConflictsListener():
     
 class ConflictsActionListener():
     
-    def __init__(self, sources, lng):
+    def __init__(self, sources, lng, the_page):
         self.sources=sources
         self.lng = lng
+        self.the_page = the_page
+        
+    def on_selection_change(self, change):
+        with self.out21:
+            clear_output()
+
+            # Extract the rev_id selected and convert it to string.
+            diff = self.qgrid_token_obj.get_selected_df().reset_index()['rev_id'].iloc[0]      
+            
+            # Print URL.
+            url = f"https://{self.lng}.wikipedia.org/w/index.php?&title={self.the_page['title'].replace(' ', '_')}&diff={diff}"
+            print('Link to the wikipedia diff: ')
+            print(url)
         
     def add_columns(self):
         #time_diff_secs
@@ -203,9 +216,6 @@ class ConflictsActionListener():
         g = self.conflicts.sort_values(['time_diff_secs']).groupby('token_id', as_index=False)
         self.conflicts['order'] = g.cumcount()
 
-
-        
-        
 #         for token_id in self.conflicts['token_id'].unique():
 #             token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs').copy()
 #             self.conflicts.loc[token_df.index, 'order'] = list(range(1, len(token_df)+1))
@@ -233,7 +243,7 @@ class ConflictsActionListener():
 
         if len(self.conflicts) > 0:
             conflicts_for_grid = self.conflicts[[
-                'count', 'order', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'time_diff_secs', 'name', 'editor_id', 'rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
+                'order', 'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'name', 'editor_id', 'time_diff_secs','rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
             conflicts_for_grid['timestamp'] = pd.to_datetime(conflicts_for_grid['timestamp'], cache=False, utc=True).dt.date
             conflicts_for_grid = conflicts_for_grid[(conflicts_for_grid.timestamp >= _range1) &
                 (conflicts_for_grid.timestamp <= _range2)]
@@ -245,6 +255,9 @@ class ConflictsActionListener():
             qgrid_token_obj = qgrid.show_grid(self.df_for_grid,grid_options={'forceFitColumns':False})
             self.qgrid_token_obj = qgrid_token_obj
             display(self.qgrid_token_obj)
+            self.out21 = Output()
+            display(self.out21)
+            self.qgrid_token_obj.observe(self.on_selection_change, names=['_selected_rows'])
             
         else:
             display(md(f'**There are no conflicting tokens in this page.**'))
