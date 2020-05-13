@@ -197,7 +197,11 @@ class ConflictsActionListener():
         #order and count columns
         #self.conflicts.reset_index(inplace=True)
         counts = self.conflicts[['token_id', 'token']].groupby(['token_id']).count()
+        #count column
         self.conflicts = counts.merge(self.conflicts, right_index=True, on='token_id', how='outer').rename(columns = {'token_x':'count','token_y':'token'}).reset_index()
+        #order column
+        g = self.conflicts.sort_values(['time_diff_secs']).groupby('token_id', as_index=False)
+        self.conflicts['order'] = g.cumcount()
 
 
         
@@ -229,7 +233,7 @@ class ConflictsActionListener():
 
         if len(self.conflicts) > 0:
             conflicts_for_grid = self.conflicts[[
-                'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'time_diff_secs', 'name', 'editor_id', 'rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
+                'count', 'order', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'time_diff_secs', 'name', 'editor_id', 'rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
             conflicts_for_grid['timestamp'] = pd.to_datetime(conflicts_for_grid['timestamp'], cache=False, utc=True).dt.date
             conflicts_for_grid = conflicts_for_grid[(conflicts_for_grid.timestamp >= _range1) &
                 (conflicts_for_grid.timestamp <= _range2)]
