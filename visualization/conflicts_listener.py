@@ -9,6 +9,9 @@ from utils.notebooks import get_previous_notebook
 
 from metrics.conflict import ConflictManager
 
+import calendar
+from datetime import date
+
 
 class ConflictsListener():
 
@@ -262,3 +265,158 @@ class ConflictsActionListener():
         else:
             display(md(f'**There are no conflicting tokens in this page.**'))
             display(HTML(f'<a href="{get_previous_notebook()}" target="_blank">Go back to the previous workbook</a>'))
+            
+            
+class ConflictsEditorListener():
+    
+    def __init__(self, conflict_manager, editor_names):
+        self.conflict_manager = conflict_manager
+        self.conflict_manager.calculate()
+        clear_output()        
+        self.token_source = self.conflict_manager.all_actions
+        self.token_conflict = self.conflict_manager.conflicts
+        self.token_elegible = self.conflict_manager.elegible_actions
+        self.editor_names = editor_names
+        
+        self.qg_obj = None
+        self.out = Output()
+        
+    
+    def __change_date(self, old_date):
+        new_date = pd.Timestamp(old_date.year, old_date.month, 1)
+    
+        return new_date
+    
+    
+    def get_editor_month(self):
+        elegible_no_init = self.token_elegible.copy()
+        
+        # Classify conflicts
+        elegible_no_init["rev_time"] = elegible_no_init["rev_time"].apply(lambda x: self.__change_date(x))
+        editor_group = elegible_no_init.groupby(["rev_time", "editor"]).agg({'conflict': 'sum',
+                                                     "action":"count"}).reset_index().rename({"editor": "editor_id"}, axis=1)
+        
+        # Merge to new table
+        editor_names = self.editor_names.copy()
+        editor_names["editor_id"] = editor_names["editor_id"].astype(str)
+        editor_month_conf = editor_names[['editor_id', 'name']].merge(editor_group, right_index=True,how="right", 
+                                                           on='editor_id').sort_values("rev_time").set_index("rev_time")
+        editor_month_conf["conflict"] = editor_month_conf["conflict"] / editor_month_conf["action"]
+        editor_month_conf = editor_month_conf[editor_month_conf["conflict"] != 0]
+        editor_month_conf.drop("action", axis=1, inplace=True)
+        
+        return editor_month_conf
+    
+    
+    def __count_in_out(self, df):
+        mask_out = (df["action"] == "out").astype(int)
+        mask_in = (df["action"] == "in").astype(int)
+        df["in_action"] = mask_in
+        df["out_action"] = mask_out
+
+        count_list = []
+        for tokenid in df["token_id"].unique():
+            df_token = df[df["token_id"] == tokenid]
+            df_count = pd.DataFrame(data={"token_id": tokenid,
+                                    "in_actions": df_token["in_action"].sum(),
+                                    "out_actions": df_token["out_action"].sum()}, index=[0]).set_index("token_id")
+            count_list.append(df_count)
+        
+        return pd.concat(count_list)
+    
+    
+    def __date_editor_filter(self, df, year_month, editor_id=None):
+        year, month = year_month
+        selected_time_start = date(year, month, 1)
+        selected_time_end = date(year, month, calendar.monthrange(year,month)[1])
+
+        mask_date = (selected_time_start <= df["rev_time"].dt.date) & (selected_time_end >= df["rev_time"].dt.date)
+        if editor_id != None:
+            mask_editor = df["editor"] == editor_id
+        else:
+            mask_editor = mask_date
+
+        return mask_date & mask_editor
+    
+    
+    def __get_main_opponent(self, editor_id, token_indices, editor_dict):
+        conflict_actions = self.conflict_manager.get_conflicting_actions(editor_id)
+
+        main_opponents = []
+        for token_id in token_indices:
+            conflict_token = conflict_actions[conflict_actions["token_id"] == token_id].sort_values("conflict", ascending=False)
+            main_opponents.append(conflict_token.iloc[[0]][["token_id", "editor"]].set_index("token_id"))
+
+        main_opponents = pd.concat(main_opponents)
+        main_opponents.replace((editor_dict), inplace=True)
+
+        return main_opponents
+    
+    
+    def get_tokens(self, df_selected):
+        with self.out:
+            clear_output()
+            editor_id = df_selected["editor_id"].values[0]
+            year_and_month = (df_selected.index[0].year, df_selected.index[0].month)
+            display(md(f"In **{year_and_month[1]}.{year_and_month[0]}** you have selected the editor **{df_selected['name'].values[0]}**"))
+
+            # All actions.
+            selected_source_tokens = self.token_source.loc[self.__date_editor_filter(self.token_source, 
+                                                             year_and_month, editor_id)].reset_index(drop=True)
+
+            # Conflicts.
+            selected_conflict_tokens = self.token_conflict.loc[self.__date_editor_filter(self.token_conflict, 
+                                                            year_and_month, editor_id)].reset_index(drop=True)
+
+            # Elegibles.
+            selected_elegible_tokens = self.token_elegible.loc[self.__date_editor_filter(self.token_elegible, 
+                                                        year_and_month, editor_id)].reset_index(drop=True)
+
+            # Classification and merge.
+            selected_source = selected_source_tokens.groupby(["token_id"]).agg({"rev_id": "count"}).rename({"rev_id": "revisions"}, axis=1)
+            selected_conflicts = selected_conflict_tokens.groupby(["token_id"]).agg({"action": "count", 
+                                                             "conflict": "sum"}).rename({"action": "conflicts"}, axis=1)
+
+            selected_elegibles = selected_elegible_tokens.groupby(["token_id"]).agg({"action": "count"}).rename({"action": "elegibles"}, axis=1)
+
+            selected_elegibles = selected_elegibles.merge(selected_source, on="token_id")
+
+            in_out = self.__count_in_out(selected_source_tokens)
+            selected_elegibles = selected_elegibles.merge(in_out, on="token_id")
+
+            selected_df = selected_conflicts.merge(selected_elegibles, on="token_id", how="right")
+            selected_df["conflict"] = selected_df["conflict"] / selected_df["elegibles"]
+            selected_df = selected_df.fillna(0)
+            selected_df = selected_df.merge(selected_elegible_tokens[["token_id", "token"]].drop_duplicates().set_index("token_id"), 
+                            on="token_id")[["token", "elegibles", "conflicts", "conflict", "revisions", "in_actions", "out_actions"]]
+            selected_df = selected_df[selected_df["conflict"] != 0]
+
+            # Find the main opponent for each token.
+            editor_to_id = self.get_editor_month()[["editor_id", "name"]]
+            editor_id_dict = dict(zip(editor_to_id["editor_id"], editor_to_id["name"]))
+            for k, v in editor_id_dict.items():
+                if str(v) == "nan":
+                    editor_id_dict[k] = k
+                else:
+                    pass
+
+            main_opponent = self.__get_main_opponent(editor_id=editor_id, token_indices=selected_df.index, editor_dict=editor_id_dict)
+            selected_df = selected_df.merge(main_opponent, on="token_id").rename({"editor": "main_opponent", "token": "string"}, axis=1)
+
+            display(qgrid.show_grid(selected_df[selected_df["string"] != "<!--"]))
+           
+    
+    def on_selection_change(self, change):
+        self.get_tokens(self.qg_obj.get_selected_df())
+    
+    
+    def listen(self):
+        main_df = self.get_editor_month()
+        main_df.index.name = "year_month"
+        
+        self.qg_obj = qgrid.show_grid(main_df)
+        display(self.qg_obj)
+        display(self.out)
+        self.qg_obj.observe(self.on_selection_change, names=['_selected_rows'])
+        
+        
