@@ -218,6 +218,7 @@ class ConflictsActionListener():
         #order column
         g = self.conflicts.sort_values(['time_diff_secs']).groupby('token_id', as_index=False)
         self.conflicts['order'] = g.cumcount()
+        self.conflicts['order'] = self.conflicts['order'].apply(lambda x: x + 1)
 
 #         for token_id in self.conflicts['token_id'].unique():
 #             token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs').copy()
