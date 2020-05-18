@@ -15,8 +15,8 @@ class ProtectListener():
     def get_protect(self, level="semi"):
         """"""
         if len(self.df) == 0:
-            display(md("No protection records!"))
-            return None, None
+            display(md(f"No {level} protection records!"))
+            return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         
         df_with_expiry = self.__get_expiry()
         df_with_unknown = self.__check_unknown(df_with_expiry)
@@ -250,7 +250,7 @@ class ProtectListener():
         """"""
         # Level's name
         levels = {"semi": "Semi-protection", "fully": "Full-protection", "unknown": "Unknown protection"}
-        
+
         # For Gantt chart
         protect_plot = final_table[["type", "timestamp", "finish"]].rename({"type": "Task", "timestamp": "Start", "finish": "Finish"}, axis=1)
         protect_plot["Task"] = protect_plot["Task"].replace("protect", levels[level])
@@ -263,14 +263,15 @@ class ProtectListener():
                 protect_plot.loc[idx, "Finish"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             else:
                 protect_plot.loc[idx, "Finish"] = protect_plot["Start"].loc[idx - 1]
-                
+
         return protect_plot
 
     
     
 class TemplateListener():
     
-    def __init__(self, all_actions, protection_plot, templates=["Featured Article", "Good Article", "Disputed", "POV", "NPOV", "Neutrality"]):
+    def __init__(self, all_actions, protection_plot, templates=["Featured Article", "Good Article", "Disputed", "POV", "Pov", "PoV", 
+                                            "NPOV", "Npov", "Neutrality", "Neutral", "Point Of View", "Systemic bias"]):
         self.df = all_actions
         self.templates = templates
         self.tl = [tl.lower().split()[0] for tl in templates]
@@ -363,6 +364,19 @@ class TemplateListener():
         missing_revs = pd.concat(missing_revs).reset_index(drop=True)
         df_templates = pd.concat(df_templates).reset_index(drop=True)
         
+        
+        plot_merge_task = plot_revs.copy()
+        plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", "Neutrality", "Neutral", "Point Of View"], 
+                                               "POV*")
+        plot_merge_task["Resource"] = plot_merge_task["Task"]
+        
+        self.plot = plot_merge_task
+        
+        # Color.
+        templates_color = {"Featured Article": '#056ded', "Good Article": '#d9331c', "Disputed": '#ff0505',
+                     "POV*": '#5cdb9a', "Systemic bias":'#02f77a', 
+                     "Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+        
         if len(missing_revs) !=0:
             display(md("**Warning: there are perhaps missing records for template editing!**")) 
             display(md("The following revisions are potentially missing:"))                
@@ -374,21 +388,14 @@ class TemplateListener():
             display(md("The following revisions are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
-                ff.create_gantt(plot_revs, colors={self.templates[0]:'#056ded',
-                                       self.templates[1]:'#d9331c',
-                                       self.templates[2]:'#ff0505',
-                                       self.templates[3]:'#5cdb9a',
-                                       self.templates[4]:'#5cdb9a',
-                                       self.templates[5]:'#5cdb9a',
-                                       "Semi-protection":'#939996',
-                                       "Full-protection":'#939996',
-                                       "Unknown protection":'#939996'}, 
+                ff.create_gantt(plot_merge_task, colors=templates_color, 
                            showgrid_x=True, showgrid_y=True, bar_width=0.1, group_tasks=True, 
                            index_col='Resource', show_colorbar=False))
+            display(md("\*Includes the templates [POV/NPOV/Neutrality/Neutral/Point Of View](https://en.wikipedia.org/wiki/Template:POV)"))
         else:
             display(md("No templates or protection records found!"))
             
+            
+            
         
-        
-        self.plot = plot_revs
         
