@@ -291,11 +291,24 @@ class ConflictsEditorListener():
     
     def get_editor_month(self):
         elegible_no_init = self.token_elegible.copy()
+        all_actions = self.token_source.copy()
+        
+        #marking reinsertions
+        all_actions.loc[(all_actions['o_rev_id'].values != all_actions['rev_id'].values) & (all_actions['action'] != 'out'),'action'] = 'rein'
+        dummies = pd.get_dummies(all_actions['action'], prefix='action')
+        all_actions = pd.concat([all_actions, dummies], axis=1)
+        
+        elegible_no_init["rev_time"] = elegible_no_init["rev_time"].apply(lambda x: self.__change_date(x))
+        all_actions["rev_time"] = all_actions["rev_time"].apply(lambda x: self.__change_date(x))
         
         # Classify conflicts
-        elegible_no_init["rev_time"] = elegible_no_init["rev_time"].apply(lambda x: self.__change_date(x))
-        editor_group = elegible_no_init.groupby(["rev_time", "editor"]).agg({'conflict': 'sum',
-                                                     "action":"count"}).reset_index().rename({"editor": "editor_id"}, axis=1)
+        conflict_agg = elegible_no_init.groupby(["rev_time", "editor"]).agg({'conflict': 'sum'}).reset_index().rename({"editor": "editor_id"}, axis=1)
+        
+        all_actions_agg = all_actions.groupby(["rev_time", "editor"]).agg({"action":"count", "action_in":"sum", "action_rein":"count", "action_out":"sum"})
+        
+        editor_group = pd.merge(conflict_agg, all_actions_agg,  how='left', left_on=['rev_time', 'editor_id'], right_on = ['rev_time', 'editor']).rename({"action_in":"additions", "action_out": "deletions", "action_rein": "reinsertions"}, axis=1)
+
+
         
         # Merge to new table
         editor_names = self.editor_names.copy()
@@ -414,6 +427,7 @@ class ConflictsEditorListener():
     def listen(self):
         main_df = self.get_editor_month()
         main_df.index.name = "year_month"
+        
         
         self.qg_obj = qgrid.show_grid(main_df)
         display(self.qg_obj)
