@@ -294,11 +294,6 @@ class ConflictsEditorListener():
         elegible_no_init = self.token_elegible.copy()
         all_actions = self.token_source.copy()
         
-#         #marking reinsertions
-#         all_actions.loc[(all_actions['o_rev_id'].values != all_actions['rev_id'].values) & (all_actions['action'] != 'out'),'action'] = 'rein'
-#         dummies = pd.get_dummies(all_actions['action'], prefix='action')
-#         all_actions = pd.concat([all_actions, dummies], axis=1)
-        
         elegible_no_init["rev_time"] = elegible_no_init["rev_time"].apply(lambda x: self.__change_date(x))
         elegible_no_init['time_diff_secs'] = elegible_no_init['time_diff'].dt.total_seconds()
         
