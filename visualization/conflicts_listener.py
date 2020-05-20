@@ -8,6 +8,7 @@ from ipywidgets import Output
 from utils.notebooks import get_previous_notebook
 
 from metrics.conflict import ConflictManager
+from metrics.token import TokensManager
 
 import calendar
 from datetime import date
@@ -293,31 +294,45 @@ class ConflictsEditorListener():
         elegible_no_init = self.token_elegible.copy()
         all_actions = self.token_source.copy()
         
-        #marking reinsertions
-        all_actions.loc[(all_actions['o_rev_id'].values != all_actions['rev_id'].values) & (all_actions['action'] != 'out'),'action'] = 'rein'
-        dummies = pd.get_dummies(all_actions['action'], prefix='action')
-        all_actions = pd.concat([all_actions, dummies], axis=1)
+#         #marking reinsertions
+#         all_actions.loc[(all_actions['o_rev_id'].values != all_actions['rev_id'].values) & (all_actions['action'] != 'out'),'action'] = 'rein'
+#         dummies = pd.get_dummies(all_actions['action'], prefix='action')
+#         all_actions = pd.concat([all_actions, dummies], axis=1)
         
         elegible_no_init["rev_time"] = elegible_no_init["rev_time"].apply(lambda x: self.__change_date(x))
-        all_actions["rev_time"] = all_actions["rev_time"].apply(lambda x: self.__change_date(x))
+        elegible_no_init['time_diff_secs'] = elegible_no_init['time_diff'].dt.total_seconds()
         
         # Classify conflicts
-        conflict_agg = elegible_no_init.groupby(["rev_time", "editor"]).agg({'conflict': 'sum'}).reset_index().rename({"editor": "editor_id"}, axis=1)
+        conflict_agg = elegible_no_init.groupby(["rev_time", "editor"]).agg({'conflict': 'sum', "action":"count", "time_diff_secs": "mean"}).reset_index().rename({"editor": "editor_id", "time_diff_secs":"reaction_time"}, axis=1)
         
-        all_actions_agg = all_actions.groupby(["rev_time", "editor"]).agg({"action":"count", "action_in":"sum", "action_rein":"count", "action_out":"sum"})
+        #retrieve adds, dels and reins (as well as their survival rate)
+        tokensmanager = TokensManager(all_actions, maxwords=100)
+        adds_actions, dels_actions, reins_actions = tokensmanager.token_survive()
+        adds_actions.rename(columns = {"action": "additions", "survive": "adds_survive"}, inplace = True)
+        dels_actions.rename(columns = {"action": "deletions", "survive": "dels_survive"}, inplace = True)
+        reins_actions.rename(columns = {"action": "reinsertions", "survive": "reins_survive"}, inplace = True)
+        agg_actions = pd.concat([adds_actions, dels_actions, reins_actions], sort=False)
+        agg_actions["rev_time"] = agg_actions["rev_time"].apply(lambda x: self.__change_date(x))
         
-        editor_group = pd.merge(conflict_agg, all_actions_agg,  how='left', left_on=['rev_time', 'editor_id'], right_on = ['rev_time', 'editor']).rename({"action_in":"additions", "action_out": "deletions", "action_rein": "reinsertions"}, axis=1)
+        #count aggregated number per user per month
+        all_actions_agg = agg_actions.groupby(["rev_time", "editor"]).agg({"additions":"count", 'adds_survive': 'sum', 
+                                                           "deletions":"count", 'dels_survive': 'sum',
+                                                          "reinsertions":"count", 'reins_survive': 'sum'})
+        #merge conflict score and aggregated actions
+        editor_group = pd.merge(conflict_agg, all_actions_agg,  how='left', left_on=['rev_time', 'editor_id'], right_on = ['rev_time', 'editor'])
+        #adding productivity (number of actions survived 48h divided by all actions)
+        editor_group['productivity'] = editor_group.apply(lambda x:(x['adds_survive']+x['dels_survive']+x['reins_survive']) / (x['additions']+x['deletions']+x['reinsertions']),axis=1)
 
-
-        
+    
         # Merge to new table
         editor_names = self.editor_names.copy()
         editor_names["editor_id"] = editor_names["editor_id"].astype(str)
+        editor_group["reaction_time"] = editor_group["reaction_time"].astype(int)
         editor_month_conf = editor_names[['editor_id', 'name']].merge(editor_group, right_index=True,how="right", 
                                                            on='editor_id').sort_values("rev_time").set_index("rev_time")
         editor_month_conf["conflict"] = editor_month_conf["conflict"] / editor_month_conf["action"]
         editor_month_conf = editor_month_conf[editor_month_conf["conflict"] != 0]
-        editor_month_conf.drop("action", axis=1, inplace=True)
+        editor_month_conf.drop(["action", "adds_survive", "dels_survive", "reins_survive"], axis=1, inplace=True)
         
         return editor_month_conf
     
