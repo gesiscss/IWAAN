@@ -32,12 +32,12 @@ class ConflictsListener():
     def listen(self, _range1, _range2, granularity, black, red):
         df = self.df
 
-        df = df[(df.year_month.dt.date >= _range1) &
-                (df.year_month.dt.date <= _range2)]
+        df = df[(df.rev_time.dt.date >= _range1) &
+                (df.rev_time.dt.date <= _range2)]
 
         # calculate the aggreated values
         df = df.groupby(pd.Grouper(
-            key='year_month', freq=granularity[0])).agg({'conflicts': ['sum'],
+            key='rev_time', freq=granularity[0])).agg({'conflicts': ['sum'],
                                                        'elegibles': ['sum'],
                                                        'revisions': ['sum'],
                                                        'conflict': ['count', 'sum'],
@@ -78,13 +78,13 @@ class ConflictsListener():
         #         marker=dict(color='rgba(0, 153, 255, .8)')))
         
         if self.bargap == None:
-            layout = graph_objs.Layout(hovermode='closest',
+            layout = graph_objs.Layout(hovermode="closest",
                                        xaxis=dict(title=granularity, ticklen=5,
-                                                  zeroline=True, gridwidth=2),
+                                          zeroline=True, gridwidth=2, tickmode='auto', nticks=15),
                                        yaxis=dict(
                                            ticklen=5, gridwidth=2, range=_range),
                                        legend=dict(x=0.5, y=1.2),
-                                       showlegend=True, barmode='group')
+                                       showlegend=True, barmode='group', bargap=0.1)
         else:
             layout = graph_objs.Layout(hovermode='closest',
                                        xaxis=dict(title=granularity, ticklen=5,
@@ -167,7 +167,7 @@ class ConflictsListener():
 
         self.traces.append(
             graph_objs.Bar(
-                x=df.loc[sel,'year_month'], y=y,
+                x=df.loc[sel,'rev_time'], y=y,
                 name=metric, marker_color=color)
         )
 
@@ -285,7 +285,7 @@ class ConflictsEditorListener():
         
     
     def __change_date(self, old_date):
-        new_date = pd.Timestamp(old_date.year, old_date.month, 1)
+        new_date = pd.Timestamp(old_date.year, old_date.month, old_date.day)
     
         return new_date
     
@@ -350,11 +350,12 @@ class ConflictsEditorListener():
     
     
     def __date_editor_filter(self, df, year_month, editor_id=None):
-        year, month = year_month
-        selected_time_start = date(year, month, 1)
-        selected_time_end = date(year, month, calendar.monthrange(year,month)[1])
+        year, month, day = year_month
+        selected_time_start = date(year, month, day)
+        selected_time_end = date(year, month, day + 1)
+        #selected_time_end = date(year, month, calendar.monthrange(year,month)[1])
 
-        mask_date = (selected_time_start <= df["rev_time"].dt.date) & (selected_time_end >= df["rev_time"].dt.date)
+        mask_date = (selected_time_start <= df["rev_time"].dt.date) & (selected_time_end > df["rev_time"].dt.date)
         if editor_id != None:
             mask_editor = df["editor"] == editor_id
         else:
@@ -381,8 +382,8 @@ class ConflictsEditorListener():
         with self.out:
             clear_output()
             editor_id = df_selected["editor_id"].values[0]
-            year_and_month = (df_selected.index[0].year, df_selected.index[0].month)
-            display(md(f"In **{year_and_month[1]}.{year_and_month[0]}** you have selected the editor **{df_selected['name'].values[0]}**"))
+            year_and_month = (df_selected.index[0].year, df_selected.index[0].month, df_selected.index[0].day)
+            display(md(f"In **{year_and_month[2]}.{year_and_month[1]}.{year_and_month[0]}** you have selected the editor **{df_selected['name'].values[0]}**"))
 
             # All actions.
             selected_source_tokens = self.token_source.loc[self.__date_editor_filter(self.token_source, 
@@ -436,7 +437,7 @@ class ConflictsEditorListener():
     
     def listen(self):
         main_df = self.get_editor_month()
-        main_df.index.name = "year_month"
+        #main_df.index.name = "year_month"
         
         
         self.qg_obj = qgrid.show_grid(main_df)
