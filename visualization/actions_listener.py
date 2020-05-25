@@ -17,10 +17,9 @@ class ActionsListener():
         
     
     def get_aggregation(self):
-        actions_agg = self.get_actions_aggregation()
+        actions_agg, tokens_inc_stop, tokens_exc_stop = self.get_actions_aggregation()
         elegible_actions, conflict_actions = self.elegibles_conflicts()
         editor_revisions = self.get_revisions()
-        
         elegibles_merge = actions_agg.merge(elegible_actions, on="rev_time",
                             how="left").drop("editor_y", axis=1).rename({"editor_x": "editor"}, axis=1).fillna(0)
         conflicts_merge = elegibles_merge.merge(conflict_actions, on="rev_time", 
@@ -30,12 +29,13 @@ class ActionsListener():
         agg_table = agg_table.sort_values("rev_time").reset_index(drop=True)
         agg_table.insert(2, "page_id", self.page_id)
         
-        return agg_table
+        return agg_table, tokens_inc_stop, tokens_exc_stop
         
     def get_actions_aggregation(self):
         """Include stopwords, also count the stopwords."""
-        actions_all_dict = self.aggregation_dicts(self.tokens_all)
-        actions_dict = self.aggregation_dicts(self.tokens)
+        print("Processing collected tokens...")
+        actions_all_dict, tokens_inc_stop = self.aggregation_dicts(self.tokens_all)
+        actions_dict, tokens_exc_stop = self.aggregation_dicts(self.tokens)
         
         merge_inc = self.actions_agg(actions_all_dict)
         merge_noinc = self.actions_agg(actions_dict)
@@ -53,7 +53,8 @@ class ActionsListener():
                                                 "dels", "dels_surv_48h", "dels_stopword_count",
                                                 "reins", "reins_surv_48h", "reins_stopword_count",]]
         
-        return final_merge
+        
+        return final_merge, tokens_inc_stop, tokens_exc_stop
     
     
     def __group_actions(self, actions):
@@ -66,9 +67,9 @@ class ActionsListener():
 
     def aggregation_dicts(self, source):
         # Use TokensManager to analyse.
-        token_manager = TokensManager(source, maxwords=1e5)
-        states_table = token_manager.get_states()
+        token_manager = TokensManager(source)
         adds, dels, reins = token_manager.token_survive()
+        
         adds_surv = adds[adds["survive"] == 1]
         dels_surv = dels[dels["survive"] == 1]
         reins_surv = reins[reins["survive"] == 1]
@@ -80,11 +81,12 @@ class ActionsListener():
                  "dels_surv_48h": dels_surv,
                  "reins":reins,               
                  "reins_surv_48h": reins_surv}
-
         for key, data in grouped.items():
             grouped[key] = self.__group_actions(data).rename({"token_id": key}, axis=1)
-
-        return grouped
+        
+        tokenmanager_data = {"adds": adds, "dels": dels, "reins": reins}
+        
+        return grouped, tokenmanager_data
 
 
     def actions_agg(self, dict_for_actions):

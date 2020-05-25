@@ -24,21 +24,21 @@ class WCListener():
     def listen(self, _range1, _range2, editor, source, action, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
-            cp_all = self.sources['All content'].copy()
-            cp_revisions = self.sources['Revisions'].copy()
-            conflict_calculator = ConflictManager(cp_all, cp_revisions, lng=self.lng)
+            conflict_calculator = self.sources["cm_exc_stop"]
+            all_actions = self.sources["cm_exc_stop"].all_actions.copy()
+            elegible_actions = self.sources["cm_exc_stop"].elegible_actions.copy()
+            conflict_actions = self.sources["cm_exc_stop"].conflicts.copy()
         else:
-            cp_all = self.sources['All content'].copy()
-            cp_revisions = self.sources['Revisions'].copy()
-            conflict_calculator = ConflictManager(cp_all, cp_revisions, lng=self.lng, include_stopwords=True)
+            conflict_calculator = self.sources["cm_inc_stop"]
+            all_actions = self.sources["cm_inc_stop"].all_actions.copy()
+            elegible_actions = self.sources["cm_inc_stop"].elegible_actions.copy()
+            conflict_actions = self.sources["cm_inc_stop"].conflicts.copy()
 
-        conflict_calculator.calculate()
-        clear_output()
 
         if (self.specific_editor != None) & (self.conflict_editor is None):
-            conflict_all = conflict_calculator.all_actions[conflict_calculator.all_actions['editor']==self.specific_editor]
-            conflict_elegible = conflict_calculator.elegible_actions[conflict_calculator.elegible_actions['editor']==self.specific_editor]
-            conflict_conflicts = conflict_calculator.conflicts[conflict_calculator.conflicts['editor']==self.specific_editor]
+            conflict_all = all_actions[all_actions['editor']==self.specific_editor]
+            conflict_elegible = elegible_actions[elegible_actions['editor']==self.specific_editor]
+            conflict_conflicts = conflicts[conflicts['editor']==self.specific_editor]
             source_data = {
                 'All Actions': conflict_all,
                 'Elegible Actions': conflict_elegible,
@@ -58,9 +58,9 @@ class WCListener():
                     'Only Conflicts': editor_conflicts[~editor_conflicts['conflict'].isnull()]
                 }
         else:            
-            conflict_all = conflict_calculator.all_actions
-            conflict_elegible = conflict_calculator.elegible_actions
-            conflict_conflicts = conflict_calculator.conflicts
+            conflict_all = all_actions
+            conflict_elegible = elegible_actions
+            conflict_conflicts = conflict_actions
 
             source_data = {
                 'All Actions': conflict_all,
@@ -170,18 +170,17 @@ class WCActionsListener():
         
         # Get source data.
         if stopwords == 'Not included':
-            conflict_calculator = ConflictManager(self.sources['All content'], self.sources['Revisions'], lng=self.lng)
+            self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
+            add_actions = self.sources["tokens_exc_stop"]["adds"]
+            del_actions = self.sources["tokens_exc_stop"]["dels"]
+            rein_actions = self.sources["tokens_exc_stop"]["reins"]
         else:
-            conflict_calculator = ConflictManager(self.sources['All content'], self.sources['Revisions'], lng=self.lng, include_stopwords=True)
-        conflict_calculator.calculate()
-        clear_output()
-        self.token_source = conflict_calculator.all_actions.copy()
+            self.token_source = self.sources["cm_inc_stop"].all_actions.copy()
+            add_actions = self.sources["tokens_inc_stop"]["adds"]
+            del_actions = self.sources["tokens_inc_stop"]["dels"]
+            rein_actions = self.sources["tokens_inc_stop"]["reins"]
         
-        self.token_calculator = TokensManager(self.token_source, maxwords=self.max_words)
-        display(md('Check survival states for all actions...'))
-        self.add_actions, self.del_actions, self.rein_actions = self.token_calculator.token_survive()
-        display(md('Done!'))
-        clear_output()
+        self.token_calculator = TokensManager(self.token_source)
         
         # For tokens.
         df_token = (self.token_source).copy()
@@ -189,12 +188,12 @@ class WCActionsListener():
         #token_calculator = TokensManager(df_token, maxwords=self.max_words)        
         self._range1 = copy.copy(_range1)
         self._range2 = copy.copy(_range2)
-        self.adds = self.add_actions[(self.add_actions['rev_time'].dt.date >= _range1) & (self.add_actions['rev_time'].dt.date <= _range2)]
-        self.dels = self.del_actions[(self.del_actions['rev_time'].dt.date >= _range1) & (self.del_actions['rev_time'].dt.date <= _range2)]
-        self.reins = self.rein_actions[(self.rein_actions['rev_time'].dt.date >= _range1) & (self.rein_actions['rev_time'].dt.date <= _range2)]
+        self.adds = add_actions[(add_actions['rev_time'].dt.date >= _range1) & (add_actions['rev_time'].dt.date <= _range2)]
+        self.dels = del_actions[(del_actions['rev_time'].dt.date >= _range1) & (del_actions['rev_time'].dt.date <= _range2)]
+        self.reins = rein_actions[(rein_actions['rev_time'].dt.date >= _range1) & (rein_actions['rev_time'].dt.date <= _range2)]
         self.ranged_token = df_token[(df_token['rev_time'].dt.date >= _range1) & (df_token['rev_time'].dt.date <= _range2)]
         
-        tokens_action_no_ratio = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins, ratio=False)
+        tokens_action_no_ratio = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins, maxwords=self.max_words, ratio=False)
         
         symbol_dict = {'adds': '+', 'adds_48h': '!', 'dels': '-', 'dels_48h': '@', 'reins': '*', 'reins_48h': '#'}
         if action == 'All':

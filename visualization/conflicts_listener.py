@@ -230,17 +230,9 @@ class ConflictsActionListener():
     
     def listen(self, stopwords, _range1, _range2):
         if stopwords == 'Not included':
-            cp_all = self.sources['All content'].copy()
-            cp_revisions = self.sources['Revisions'].copy()
-            conflict_calculator = ConflictManager(cp_all, cp_revisions, lng=self.lng)
+            conflict_calculator = self.sources["con_manager"]
         else:
-            cp_all = self.sources['All content'].copy()
-            cp_revisions = self.sources['Revisions'].copy()
-            conflict_calculator = ConflictManager(cp_all, cp_revisions, lng=self.lng, include_stopwords=True)
-            
-        conflict_calculator.calculate()
-        self.conflict_calculator = conflict_calculator
-        clear_output()
+            conflict_calculator = self.sources["con_manager_all"]
 
         # display the tokens, the difference in seconds and its corresponding conflict score
         self.conflicts = conflict_calculator.conflicts.copy()
@@ -271,13 +263,11 @@ class ConflictsActionListener():
             
 class ConflictsEditorListener():
     
-    def __init__(self, conflict_manager, editor_names):
-        self.conflict_manager = conflict_manager
-        self.conflict_manager.calculate()
-        clear_output()        
-        self.token_source = self.conflict_manager.all_actions
-        self.token_conflict = self.conflict_manager.conflicts
-        self.token_elegible = self.conflict_manager.elegible_actions
+    def __init__(self, sources, editor_names):
+        self.sources = sources
+        self.token_source = self.sources["conflict_manager"].all_actions.copy()
+        self.token_conflict = self.sources["conflict_manager"].conflicts.copy()
+        self.token_elegible = self.sources["conflict_manager"].elegible_actions.copy()
         self.editor_names = editor_names
         
         self.qg_obj = None
@@ -301,8 +291,12 @@ class ConflictsEditorListener():
         conflict_agg = elegible_no_init.groupby(["rev_time", "editor"]).agg({'conflict': 'sum', "action":"count", "time_diff_secs": "mean"}).reset_index().rename({"editor": "editor_id", "time_diff_secs":"reaction_time"}, axis=1)
         
         #retrieve adds, dels and reins (as well as their survival rate)
-        tokensmanager = TokensManager(all_actions, maxwords=100)
-        adds_actions, dels_actions, reins_actions = tokensmanager.token_survive()
+        #tokensmanager = TokensManager(all_actions)
+        adds_actions = self.sources["actions"]["adds"].copy()
+        dels_actions = self.sources["actions"]["dels"].copy()
+        reins_actions = self.sources["actions"]["reins"].copy()
+        
+        #adds_actions, dels_actions, reins_actions = tokensmanager.token_survive()
         adds_actions.rename(columns = {"action": "additions", "survive": "adds_survive"}, inplace = True)
         dels_actions.rename(columns = {"action": "deletions", "survive": "dels_survive"}, inplace = True)
         reins_actions.rename(columns = {"action": "reinsertions", "survive": "reins_survive"}, inplace = True)
@@ -365,7 +359,7 @@ class ConflictsEditorListener():
     
     
     def __get_main_opponent(self, editor_id, token_indices, editor_dict):
-        conflict_actions = self.conflict_manager.get_conflicting_actions(editor_id)
+        conflict_actions = self.sources["conflict_manager"].get_conflicting_actions(editor_id)
 
         main_opponents = []
         for token_id in token_indices:

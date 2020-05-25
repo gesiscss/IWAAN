@@ -8,8 +8,7 @@ class TokensManager:
     """
     """
     
-    def __init__(self, all_actions, maxwords):
-        self.maxwords = maxwords
+    def __init__(self, all_actions):
         self.all_actions = all_actions
         
         
@@ -205,14 +204,14 @@ class TokensManager:
         return total, survival
     
     
-    def join_and_rank(self, total, survival):
+    def join_and_rank(self, total, survival, maxwords):
         """
         Join tables of adds actions.
         """
         survival = survival.rename({'counts': 'survival'}, axis=1)
         total = total.rename({'counts': 'total'}, axis=1)
 
-        merge_rough = total.iloc[:self.maxwords,:].merge(survival.iloc[:self.maxwords,:], on='token', how='outer')
+        merge_rough = total.iloc[:maxwords,:].merge(survival.iloc[:maxwords,:], on='token', how='outer')
         merge_rough = merge_rough.set_index('token')
 
         # Fill NaN for adds_survival.
@@ -233,7 +232,7 @@ class TokensManager:
         return merge_rough.sort_values(by=['total', 'survival'], ascending=False).reset_index().rename({'index': 'token'})
     
     
-    def get_all_tokens(self, adds, dels, reins, ratio=True):
+    def get_all_tokens(self, adds, dels, reins, maxwords=100, ratio=True):
         """
         """
         # Count token strings.
@@ -242,9 +241,9 @@ class TokensManager:
         reins_total, reins_survival = self.count(reins)
         
         # The most 100 popluar tokens.
-        adds_100 = self.join_and_rank(adds_total, adds_survival)
-        dels_100 = self.join_and_rank(dels_total, dels_survival)
-        reins_100 = self.join_and_rank(reins_total, reins_survival)
+        adds_100 = self.join_and_rank(adds_total, adds_survival, maxwords)
+        dels_100 = self.join_and_rank(dels_total, dels_survival, maxwords)
+        reins_100 = self.join_and_rank(reins_total, reins_survival, maxwords)
 
         adds_100.rename({'total': 'adds', 'survival': 'adds_48h'}, inplace=True, axis=1)
         dels_100.rename({'total': 'dels', 'survival': 'dels_48h'}, inplace=True, axis=1)
