@@ -8,9 +8,20 @@ import re
 
 class ProtectListener():
     
-    def __init__(self, pp_log):
+    def __init__(self, pp_log, lng):
+        self.lng = lng
         self.df = pp_log
-
+        
+        if self.lng == "en":
+            self.inf_str = "indefinite"
+            self.exp_str = "expires"
+        elif self.lng == "de":
+            self.inf_str = "unbeschränkt"
+            self.exp_str = "bis"
+        else:
+            display(md("This language is not supported yet."))
+            self.inf_str = "indefinite"
+            self.exp_str = "expires"
         
     def get_protect(self, level="semi"):
         """"""
@@ -39,16 +50,16 @@ class ProtectListener():
         reg0 = re.findall('\[(.*?)\:(.*?)\]$', captured_content)
         reg1 = re.findall('\[(.*?)\]$', captured_content)
         if len(reg0) != 0:
-            reg0[0] = (reg0[0][0] + ":" + reg0[0][1], "indefinite")
+            reg0[0] = (reg0[0][0] + ":" + reg0[0][1], self.inf_str)
             return reg0
         else:
-            reg1[0] = (reg1[0], "indefinite")
+            reg1[0] = (reg1[0], self.inf_str)
             return reg1
 
         
     def __extract_date(self, date_content):
-        if not "indefinite" in date_content:
-            extract_str = re.findall('expires\ (.*?)\ \(UTC', date_content)[0]
+        if not self.inf_str in date_content:
+            extract_str = re.findall(f'{self.exp_str}\ (.*?)\ \(UTC', date_content)[0]              
             return extract_str
         else:
             return (pd.Timestamp.max).to_pydatetime(warn=False).strftime("%H:%M, %-d %B %Y")
@@ -74,6 +85,21 @@ class ProtectListener():
     
         return states_dict
     
+    
+    def __month_lng(self, string):
+        if self.lng == "de":
+            de_month = {"März": "March", "Dezember": "December", "Mär": "Mar", "Mai": "May", "Dez": "Dec", "Januar": "January", 
+                    "Februar": "February", "Juni": "June", 
+                    "Juli": "July", "Oktobor": "October"}
+            for k, v in de_month.items():
+                new_string = string.replace(k, v)
+                if new_string != string:
+                    break
+                
+            return new_string
+        else:
+            return string
+            
     
     def __get_expiry(self):
         """"""
@@ -113,7 +139,14 @@ class ProtectListener():
                 try:
                     protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %d %B %Y")
                 except:
-                    protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %B %d, %Y")
+                    try:
+                        protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %B %d, %Y")
+                    except:
+                        v["expiry1"] = self.__month_lng(v["expiry1"])
+                        try:
+                            protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %d. %b. %Y")
+                        except:
+                            protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%d. %B %Y, %H:%M Uhr")
 
             protect_log.loc[k, "sysop"] = v["sysop"]
 
@@ -121,7 +154,15 @@ class ProtectListener():
                 try:
                     protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %d %B %Y")
                 except:
-                    protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %B %d, %Y")
+                    try:
+                        protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %B %d, %Y")
+                    except:
+                        v["expiry2"] = self.__month_lng(v["expiry2"])
+                        try:
+                            protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %d. %b. %Y")
+                        except:
+                            protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%d. %B %Y, %H:%M Uhr")
+                        
         
         return protect_log
     
@@ -270,12 +311,19 @@ class ProtectListener():
     
 class TemplateListener():
     
-    def __init__(self, all_actions, protection_plot, templates=["Featured Article", "Good Article", "Disputed", "POV", "Pov", "PoV", 
-                                            "NPOV", "Npov", "Neutrality", "Neutral", "Point Of View", "Systemic bias"]):
+    def __init__(self, all_actions, protection_plot, lng):
         self.df = all_actions
-        self.templates = templates
-        self.tl = [tl.lower().split()[0] for tl in templates]
-        
+        self.lng = lng
+        if lng == "en":
+            self.templates = ["Featured Article", "Good Article", "Disputed", "POV", "Pov", "PoV", 
+                        "NPOV", "Npov", "Neutrality", "Neutral", "Point Of View", "Systemic bias"]
+        elif lng == "de":
+            self.templates = ["Exzellent", "Lesenswert", "Neutralität"]
+        else:
+            display(md("This language is not supported yet."))
+            self.templates = ["oajdfoijelkjdf"]
+            
+        self.tl = [tl.lower().split()[0] for tl in self.templates]        
         self.plot_protect = protection_plot
                 
     def get_adjacent(self, tl):
@@ -366,16 +414,40 @@ class TemplateListener():
         
         
         plot_merge_task = plot_revs.copy()
-        plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", "Neutrality", "Neutral", "Point Of View"], 
-                                               "POV*")
+        if self.lng == "en":
+            plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", 
+                                                   "Neutrality", "Neutral", "Point Of View"], "POV*")
         plot_merge_task["Resource"] = plot_merge_task["Task"]
+        
+        # Handle upgraded unknown protection while it doesn't expire.
+        tasks = plot_merge_task["Task"].unique()
+        if "Unknown protection" in tasks:
+            unknown_start = plot_merge_task[plot_merge_task["Task"] == "Unknown protection"].iloc[0].iloc[1]
+            unknown_end = plot_merge_task[plot_merge_task["Task"] == "Unknown protection"].iloc[0].iloc[2]
+            unknown_end_idx = plot_merge_task[plot_merge_task["Task"] == "Unknown protection"].iloc[0].name
+            if "Semi-protection" in tasks:
+                protect_start = plot_merge_task[plot_merge_task["Task"] == "Semi-protection"].iloc[-1].iloc[1]
+            elif "Full-protection" in tasks:
+                protect_start = plot_merge_task[plot_merge_task["Task"] == "Full-protection"].iloc[-1].iloc[1]
+            if (unknown_end > protect_start) & (protect_start > unknown_start):
+                plot_merge_task.loc[unknown_end_idx, "Finish"] = protect_start
+            else:
+                pass
+        else:
+            pass
         
         self.plot = plot_merge_task
         
         # Color.
-        templates_color = {"Featured Article": '#056ded', "Good Article": '#d9331c', "Disputed": '#ff0505',
-                     "POV*": '#5cdb9a', "Systemic bias":'#02f77a', 
-                     "Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+        if self.lng == "en":
+            templates_color = {"Featured Article": '#056ded', "Good Article": '#d9331c', "Disputed": '#ff0505',
+                         "POV*": '#5cdb9a', "Systemic bias":'#02f77a', 
+                         "Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+        elif self.lng == "de":
+            templates_color = {"Exzellent": '#056ded', "Lesenswert": '#d9331c', "Neutralität": '#5cdb9a', 
+                         "Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+        else:
+            templates_color = {"Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
         
         if len(missing_revs) !=0:
             display(md("**Warning: there are perhaps missing records for template editing!**")) 
@@ -391,7 +463,8 @@ class TemplateListener():
                 ff.create_gantt(plot_merge_task, colors=templates_color, 
                            showgrid_x=True, showgrid_y=True, bar_width=0.1, group_tasks=True, 
                            index_col='Resource', show_colorbar=False))
-            display(md("\*Includes the templates [POV/NPOV/Neutrality/Neutral/Point Of View](https://en.wikipedia.org/wiki/Template:POV)"))
+            if "POV*" in self.plot["Task"].unique():
+                display(md("\*Includes the templates [POV/NPOV/Neutrality/Neutral/Point Of View](https://en.wikipedia.org/wiki/Template:POV)"))
         else:
             display(md("No templates or protection records found!"))
             
