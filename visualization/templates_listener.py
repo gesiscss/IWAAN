@@ -1,5 +1,6 @@
+import numpy as np
 import pandas as pd
-from IPython.display import display, Markdown as md
+from IPython.display import display, Markdown as md, clear_output
 from datetime import datetime, timedelta
 import plotly.figure_factory as ff
 import qgrid
@@ -311,9 +312,10 @@ class ProtectListener():
     
 class TemplateListener():
     
-    def __init__(self, all_actions, protection_plot, lng):
+    def __init__(self, all_actions, protection_plot, lng, wikipediadv_api):
         self.df = all_actions
         self.lng = lng
+        self.api = wikipediadv_api
         if lng == "en":
             self.templates = ["Featured Article", "Good Article", "Disputed", "POV", "Pov", "PoV", 
                         "NPOV", "Npov", "Neutrality", "Neutral", "Point Of View", "Systemic bias"]
@@ -329,7 +331,7 @@ class TemplateListener():
     def get_adjacent(self, tl):
         """Label adjacent '{{' and template name."""
         # Sort by revision time and token id.
-        match_source = (self.df).sort_values(['rev_time', 'token_id'])
+        match_source = (self.df.copy()).sort_values(['rev_time', 'token_id'])
         
         # Convert boolean to 0-1.
         mask_symbol = (match_source['token'] == '{{').astype(int)
@@ -379,8 +381,73 @@ class TemplateListener():
         suspicious = match_rough[match_rough["token"] == tl].iloc[:, :11].drop(["index"], axis=1).reset_index(drop=True)
         captured = match_rough3[match_rough3["token"] == tl].iloc[:, :11].drop(["index"], axis=1).reset_index(drop=True)
         
-        return captured, suspicious, self.__get_diff(suspicious, captured)                                            
+        return captured, suspicious, self.__get_diff(suspicious, captured)
+
+    
+    def get_prev_rev(self, current_rev):
+        tokens_all = self.df.copy()
+        tokens_all = tokens_all.sort_values("rev_time").reset_index(drop=True)
+        token_rev_ids = tokens_all["rev_id"].unique()
+
+        loc_current_rev = np.where(token_rev_ids == current_rev)[0][0]
+        prev_rev = token_rev_ids[loc_current_rev - 1]
+
+        return prev_rev
+    
+    
+    def template_capturer(self, html_content, template):
+        html_content = html_content.lower()
+        pat1 = f'{{<del class="diffchange diffchange-inline">{template}</del> article}}'
+        pat2 = f'{{<ins class="diffchange diffchange-inline">{template}</ins> article}}'
+        bool_missing = (pat1 in html_content) | (pat2 in html_content)
+
+        return int(bool_missing)
+    
+    
+    def get_missing_tl(self, sus):
+        # Find previous rev_id.
+        sus_rev_id = sus["rev_id"].unique()
+        prev_ids = {key: self.get_prev_rev(key) for key in sus_rev_id}
+        
+        # Retrieve revision changes in the form of html.
+        diff_response = {}
+        for cur, prev in prev_ids.items():
+            diff_response[cur] = self.api.get_talk_rev_diff(cur, prev)["*"]
+        
+        # Mark missing status.
+        sus["missing"] = 0
+        for sus_row in sus.iterrows():
+            content = diff_response[sus_row[1]["rev_id"]]
+            tl_token = sus_row[1]["token"]
+            sus.loc[sus_row[0], "missing"] = self.template_capturer(content, tl_token)
             
+        missing = sus[sus["missing"] == 1].drop("missing", axis=1)
+        
+        return missing
+    
+    
+    def to_plot_df(self, standard_df, tl_idx):
+        plot_df = standard_df[["action", "rev_time"]].rename({"action": "Task", "rev_time": "Start"}, axis=1)
+        plot_df["Start"] = plot_df["Start"].dt.strftime('%Y-%m-%d %H:%M:%S')
+        plot_df["Finish"] = plot_df.shift(-1)["Start"].fillna(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+        plot_df = plot_df[plot_df["Task"] == "in"]
+        plot_df["Task"].replace({"in": self.templates[tl_idx]}, inplace=True)
+        plot_df["Resource"] = plot_df["Task"]
+        plot_df = plot_df.reset_index(drop=True)
+        
+        return plot_df
+        
+    
+    def rebuild_plot_df(self, unfinish_plot):
+        mask_not_last_row = (unfinish_plot["Task"] == unfinish_plot.shift(-1)["Task"])
+        mask_plus = pd.to_datetime(unfinish_plot["Finish"]) - pd.to_datetime(unfinish_plot.shift(-1)["Start"]) > timedelta()
+        mask_same_start = (unfinish_plot["Start"] == unfinish_plot.shift(-1)["Start"])
+        mask_to_delete = mask_not_last_row & mask_plus & mask_same_start
+        
+        return unfinish_plot.loc[~mask_to_delete].reset_index(drop=True)
+    
+    
     def listen(self):
         plot_revs = []        
         missing_revs = []
@@ -388,15 +455,7 @@ class TemplateListener():
         for idx, tl in enumerate(self.tl):
             # For plot.
             captured, _, diff = self.get_template(tl)
-            plot_df = captured[["action", "rev_time"]].rename({"action": "Task", "rev_time": "Start"}, axis=1)
-            plot_df["Start"] = plot_df["Start"].dt.strftime('%Y-%m-%d %H:%M:%S')
-            plot_df["Finish"] = plot_df.shift(-1)["Start"].fillna(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                       
-            plot_df = plot_df[plot_df["Task"] == "in"]
-            plot_df["Task"].replace({"in": self.templates[idx]}, inplace=True)
-            plot_df["Resource"] = plot_df["Task"]
-            plot_df = plot_df.reset_index(drop=True)
-            
+            plot_df = self.to_plot_df(captured, idx)            
             plot_revs.append(plot_df)
             
             # For missing revisions.
@@ -412,7 +471,12 @@ class TemplateListener():
         missing_revs = pd.concat(missing_revs).reset_index(drop=True)
         df_templates = pd.concat(df_templates).reset_index(drop=True)
         
+        # Capture missing values
+        if len(missing_revs) != 0:
+            missing_values = self.get_missing_tl(missing_revs)
+            df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
         
+        # Prepare for plotting
         plot_merge_task = plot_revs.copy()
         if self.lng == "en":
             plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", 
@@ -436,6 +500,19 @@ class TemplateListener():
         else:
             pass
         
+        # New plot df for missing values
+        new_plot = []
+        for tl in df_templates["token"].unique():
+            name_idx = self.tl.index(tl)
+            cap_one_tl = df_templates[df_templates["token"] == tl]
+            new_plot.append(self.to_plot_df(cap_one_tl, name_idx))
+            
+        if len(new_plot) != 0:    
+            new_plot = pd.concat(new_plot)
+
+            semi_plot = pd.concat([plot_merge_task, new_plot]).sort_values(["Task", "Start"]).reset_index(drop=True)
+            plot_merge_task = self.rebuild_plot_df(semi_plot)
+                
         self.plot = plot_merge_task
         
         # Color.
@@ -449,14 +526,15 @@ class TemplateListener():
         else:
             templates_color = {"Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
         
-        if len(missing_revs) !=0:
-            display(md("**Warning: there are perhaps missing records for template editing!**")) 
-            display(md("The following revisions are potentially missing:"))                
-            display(qgrid.show_grid(missing_revs))
-        else:
-            pass
+#         if len(missing_revs) !=0:
+#             display(md("**Warning: there are perhaps missing records for template editing!**")) 
+#             display(md("The following revisions are possibly missing:"))                
+#             display(qgrid.show_grid(missing_revs))
+#         else:
+#             pass
                 
         if len(plot_revs) != 0:
+            self.cap = df_templates
             display(md("The following revisions are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
