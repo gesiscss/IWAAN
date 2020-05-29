@@ -312,10 +312,11 @@ class ProtectListener():
     
 class TemplateListener():
     
-    def __init__(self, all_actions, protection_plot, lng, wikipediadv_api):
+    def __init__(self, all_actions, protection_plot, lng, wikipediadv_api, page):
         self.df = all_actions
         self.lng = lng
         self.api = wikipediadv_api
+        self.page = page
         if lng == "en":
             self.templates = ["Featured Article", "Good Article", "Disputed", "POV", "Pov", "PoV", 
                         "NPOV", "Npov", "Neutrality", "Neutral", "Point Of View", "Systemic bias"]
@@ -397,9 +398,17 @@ class TemplateListener():
     
     def template_capturer(self, html_content, template):
         html_content = html_content.lower()
-        pat1 = f'{{<del class="diffchange diffchange-inline">{template}</del> article}}'
-        pat2 = f'{{<ins class="diffchange diffchange-inline">{template}</ins> article}}'
-        bool_missing = (pat1 in html_content) | (pat2 in html_content)
+        pat1 = f'<td class="diff-deletedline"><div>{{{{<del class="diffchange diffchange-inline">{template}</del> article}}}}'
+        pat2 = f'<td class="diff-addedline"><div>{{{{<ins class="diffchange diffchange-inline">{template}</ins> article}}}}'
+        pat3 = f'</a>{{{{<ins class="diffchange diffchange-inline">{template}</ins> article}}}}'
+        pat4 = f'</a>{{{{<del class="diffchange diffchange-inline">{template}</del> article}}}}'
+        pat5 = f'{{{{{template} article}}}}'
+        pat6 = f'</a>{{{{{template} article}}}}'
+        pat7 = f'<td class="diff-addedline"><div>{{{{<ins class="diffchange diffchange-inline">{template}</ins>'
+        pat8 = f'<td class="diff-deletedline"><div>{{{{<del class="diffchange diffchange-inline">{template}</del>'
+        pat9 = f'<td class="diff-addedline"><div>{{{{{template}}}}}</div></td>'
+        pat10 = f'<td class="diff-deletedline"><div>{{{{{template}}}}}</div></td>'
+        bool_missing = (pat1 in html_content) | (pat2 in html_content) | (pat3 in html_content) | (pat4 in html_content) | (pat5 in html_content) | (pat6 in html_content) | (pat7 in html_content) | (pat8 in html_content) | (pat9 in html_content) | (pat10 in html_content)
 
         return int(bool_missing)
     
@@ -449,14 +458,12 @@ class TemplateListener():
     
     
     def listen(self):
-        plot_revs = []        
+        #plot_revs = []        
         missing_revs = []
         df_templates = []
         for idx, tl in enumerate(self.tl):
             # For plot.
             captured, _, diff = self.get_template(tl)
-            plot_df = self.to_plot_df(captured, idx)            
-            plot_revs.append(plot_df)
             
             # For missing revisions.
             missing_revs.append(diff)
@@ -464,24 +471,32 @@ class TemplateListener():
             # For captured revs.
             df_templates.append(captured)
         
-        # For protection.
-        plot_revs.append(self.plot_protect)
-        
-        plot_revs = pd.concat(plot_revs).reset_index(drop=True)
-        missing_revs = pd.concat(missing_revs).reset_index(drop=True)
-        df_templates = pd.concat(df_templates).reset_index(drop=True)
+        missing_revs = pd.concat(missing_revs).reset_index(drop=True).drop_duplicates()
+        df_templates = pd.concat(df_templates).reset_index(drop=True).drop_duplicates()
+        self.cp0 = df_templates
         
         # Capture missing values
         if len(missing_revs) != 0:
+            display(md("Checking if there are missing templates..."))
             missing_values = self.get_missing_tl(missing_revs)
             df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
-        
-        # Prepare for plotting
-        plot_merge_task = plot_revs.copy()
-        if self.lng == "en":
-            plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", 
-                                                   "Neutrality", "Neutral", "Point Of View"], "POV*")
-        plot_merge_task["Resource"] = plot_merge_task["Task"]
+            clear_output()
+            display(md(f"***Page: {self.page['title']} ({self.lng.upper()})***"))
+                
+        # Create plot df for missing values
+        plot = []
+        for tl in df_templates["token"].unique():
+            name_idx = self.tl.index(tl)
+            cap_one_tl = df_templates[df_templates["token"] == tl]
+            plot.append(self.to_plot_df(cap_one_tl, name_idx))
+            
+        # For protection.
+        plot.append(self.plot_protect)
+                        
+        if len(plot) != 0:
+            plot_merge_task = pd.concat(plot)
+            #semi_plot = pd.concat([plot_merge_task, new_plot]).sort_values(["Task", "Start"]).reset_index(drop=True)
+            #plot_merge_task = self.rebuild_plot_df(semi_plot)            
         
         # Handle upgraded unknown protection while it doesn't expire.
         tasks = plot_merge_task["Task"].unique()
@@ -500,18 +515,11 @@ class TemplateListener():
         else:
             pass
         
-        # New plot df for missing values
-        new_plot = []
-        for tl in df_templates["token"].unique():
-            name_idx = self.tl.index(tl)
-            cap_one_tl = df_templates[df_templates["token"] == tl]
-            new_plot.append(self.to_plot_df(cap_one_tl, name_idx))
             
-        if len(new_plot) != 0:    
-            new_plot = pd.concat(new_plot)
-
-            semi_plot = pd.concat([plot_merge_task, new_plot]).sort_values(["Task", "Start"]).reset_index(drop=True)
-            plot_merge_task = self.rebuild_plot_df(semi_plot)
+        if self.lng == "en":
+            plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", 
+                                                   "Neutrality", "Neutral", "Point Of View"], "POV*")
+        plot_merge_task["Resource"] = plot_merge_task["Task"]
                 
         self.plot = plot_merge_task
         
@@ -533,8 +541,7 @@ class TemplateListener():
 #         else:
 #             pass
                 
-        if len(plot_revs) != 0:
-            self.cap = df_templates
+        if len(plot) != 0:
             display(md("The following revisions are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
