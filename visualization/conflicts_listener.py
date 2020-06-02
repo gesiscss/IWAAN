@@ -210,6 +210,8 @@ class ConflictsActionListener():
         self.conflicts.loc[self.conflicts['rev_id'] == -1, 'editor_id'] = self.conflicts.loc[self.conflicts['rev_id'] == -1, 'o_editor']
         self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff'] = 0
         self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff_secs'] = 0
+        self.conflicts.loc[(self.conflicts['action'] == 'in') & (self.conflicts['rev_id'] == -1), 'rev_id'] = self.conflicts.loc[(self.conflicts['action'] == 'in') & (self.conflicts['rev_id'] == -1), 'o_rev_id']
+        self.conflicts = self.conflicts.loc[self.conflicts['rev_id'] != -1]
         
         #order and count columns
         #self.conflicts.reset_index(inplace=True)
