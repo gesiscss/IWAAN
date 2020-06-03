@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from IPython.display import display, Markdown as md, clear_output
-from ipywidgets import Output
+from ipywidgets import Output, fixed
 from .wordclouder import WordClouder
 
 from metrics.token import TokensManager
@@ -99,7 +99,7 @@ class WCListener():
 
         try:
             wcr = wc.get_wordcloud()
-            display(md(f"**Only top {self.max_words} most frequent words displayed.**"))
+            display(md(f"**Only top {self.max_words} most frequent conflicting words displayed.**"))
 
             # Revisions involved
             display(md(f"### The below token conflicts ocurred in a total of {len(df['rev_id'].unique())} revisions:"))
@@ -167,7 +167,8 @@ class WCActionsListener():
         """
         if (len(str(_range1.year)) < 4) | (len(str(_range2.year)) < 4):
             return display(md("Please input the correct year format!"))
-        
+                       
+       
         # Get source data.
         if stopwords == 'Not included':
             self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
@@ -179,12 +180,12 @@ class WCActionsListener():
             add_actions = self.sources["tokens_inc_stop"]["adds"]
             del_actions = self.sources["tokens_inc_stop"]["dels"]
             rein_actions = self.sources["tokens_inc_stop"]["reins"]
-        
+
         self.token_calculator = TokensManager(self.token_source)
-        
+
         # For tokens.
         df_token = (self.token_source).copy()
-        
+
         #token_calculator = TokensManager(df_token, maxwords=self.max_words)        
         self._range1 = copy.copy(_range1)
         self._range2 = copy.copy(_range2)
@@ -192,9 +193,9 @@ class WCActionsListener():
         self.dels = del_actions[(del_actions['rev_time'].dt.date >= _range1) & (del_actions['rev_time'].dt.date <= _range2)]
         self.reins = rein_actions[(rein_actions['rev_time'].dt.date >= _range1) & (rein_actions['rev_time'].dt.date <= _range2)]
         self.ranged_token = df_token[(df_token['rev_time'].dt.date >= _range1) & (df_token['rev_time'].dt.date <= _range2)]
-        
+
         tokens_action_no_ratio = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins, maxwords=self.max_words, ratio=False)
-        
+
         symbol_dict = {'adds': '+', 'adds_48h': '!', 'dels': '-', 'dels_48h': '@', 'reins': '*', 'reins_48h': '#'}
         if action == 'All':
             long_list = []
@@ -221,7 +222,7 @@ class WCActionsListener():
         try:
             wcr = wc.get_wordcloud()
             display(md(f"**Only top {self.max_words} most frequent words displayed.**"))
-            
+
             # Revisions involved
             #display(md(f"### The below tokens existed in a total of {len(df['rev_id'].unique())} revisions:"))
 
@@ -234,7 +235,7 @@ class WCActionsListener():
         except ValueError:
             display(
                 md("Cannot create the wordcloud, there were zero actions."))
-            
+
         tokens_action = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins)
         tokens_action.index = tokens_action.index.rename("string")
         if len(tokens_action) != 0:
@@ -242,7 +243,7 @@ class WCActionsListener():
             self.qgrid_token_obj = qgrid_token_obj
             display(md('**Select one token you are interested in:**'))
             display(self.qgrid_token_obj)
-            
+
             self.out1 = Output()
             display(self.out1)
             self.qgrid_token_obj.observe(self.token_selection_change, names=['_selected_rows'])            
