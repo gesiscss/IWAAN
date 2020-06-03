@@ -184,6 +184,23 @@ class ProtectListener():
         protect_log["unknown"] = protect_log["unknown"].fillna(0)
         
         return protect_log
+    
+     
+    def __insert_row(self, row_number, df, row_value):
+        "Function to insert row in the dataframe."
+        start_upper = 0
+        end_upper = row_number 
+        start_lower = row_number 
+        end_lower = df.shape[0]  
+        upper_half = [*range(start_upper, end_upper, 1)] 
+        lower_half = [*range(start_lower, end_lower, 1)] 
+        lower_half = [x.__add__(1) for x in lower_half] 
+        index_ = upper_half + lower_half 
+        df.index = index_
+
+        df.loc[row_number] = row_value  
+
+        return df
 
     
     def __check_unprotect(self, protect_log):
@@ -193,8 +210,26 @@ class ProtectListener():
             for idx in reversed(idx_unprotect):
                 if protect_log[col_name].loc[idx + 1] == 1:
                     protect_log.loc[idx, col_name] = 1
+                    
+        # Deal with upgraded unknown protection
+        unknown_idx = protect_log[(protect_log["unknown"] == 1) & (protect_log["action"] == "protect")].index
+        upgrade_sus = protect_log.loc[unknown_idx - 1]
         
-        return protect_log
+        contains_upgrade = upgrade_sus[upgrade_sus["action"] == "protect"]
+        if len(contains_upgrade) != 0:
+            higher_level_idx = contains_upgrade.index
+            upgrade_idx = higher_level_idx + 1
+            
+            aux_unprotect = protect_log.loc[upgrade_idx].copy()
+            aux_unprotect.loc[:,"action"] = "unprotect"
+            aux_unprotect.loc[:, "timestamp"] = upgrade_sus.loc[higher_level_idx]["timestamp"].values
+            
+            for row in aux_unprotect.iterrows():
+                self.__insert_row(row[0], protect_log, row[1].values)
+        else:
+            pass
+        
+        return protect_log.sort_index()
     
     
     def __select_level(self, protect_log, level):
@@ -406,8 +441,8 @@ class TemplateListener():
         pat6 = f'</a>{{{{{template} article}}}}'
         pat7 = f'<td class="diff-addedline"><div>{{{{<ins class="diffchange diffchange-inline">{template}</ins>'
         pat8 = f'<td class="diff-deletedline"><div>{{{{<del class="diffchange diffchange-inline">{template}</del>'
-        pat9 = f'<td class="diff-addedline"><div>{{{{{template}}}}}</div></td>'
-        pat10 = f'<td class="diff-deletedline"><div>{{{{{template}}}}}</div></td>'
+        pat9 = f'<td class="diff-addedline"><div>{{{{{template}'
+        pat10 = f'<td class="diff-deletedline"><div>{{{{{template}'
         bool_missing = (pat1 in html_content) | (pat2 in html_content) | (pat3 in html_content) | (pat4 in html_content) | (pat5 in html_content) | (pat6 in html_content) | (pat7 in html_content) | (pat8 in html_content) | (pat9 in html_content) | (pat10 in html_content)
 
         return int(bool_missing)
@@ -448,13 +483,13 @@ class TemplateListener():
         return plot_df
         
     
-    def rebuild_plot_df(self, unfinish_plot):
-        mask_not_last_row = (unfinish_plot["Task"] == unfinish_plot.shift(-1)["Task"])
-        mask_plus = pd.to_datetime(unfinish_plot["Finish"]) - pd.to_datetime(unfinish_plot.shift(-1)["Start"]) > timedelta()
-        mask_same_start = (unfinish_plot["Start"] == unfinish_plot.shift(-1)["Start"])
-        mask_to_delete = mask_not_last_row & mask_plus & mask_same_start
+#     def rebuild_plot_df(self, unfinish_plot):
+#         mask_not_last_row = (unfinish_plot["Task"] == unfinish_plot.shift(-1)["Task"])
+#         mask_plus = pd.to_datetime(unfinish_plot["Finish"]) - pd.to_datetime(unfinish_plot.shift(-1)["Start"]) > timedelta()
+#         mask_same_start = (unfinish_plot["Start"] == unfinish_plot.shift(-1)["Start"])
+#         mask_to_delete = mask_not_last_row & mask_plus & mask_same_start
         
-        return unfinish_plot.loc[~mask_to_delete].reset_index(drop=True)
+#         return unfinish_plot.loc[~mask_to_delete].reset_index(drop=True)
     
     
     def listen(self):
@@ -473,7 +508,6 @@ class TemplateListener():
         
         missing_revs = pd.concat(missing_revs).reset_index(drop=True).drop_duplicates()
         df_templates = pd.concat(df_templates).reset_index(drop=True).drop_duplicates()
-        self.cp0 = df_templates
         
         # Capture missing values
         if len(missing_revs) != 0:
@@ -482,6 +516,7 @@ class TemplateListener():
             df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
             clear_output()
             display(md(f"***Page: {self.page['title']} ({self.lng.upper()})***"))
+            
                 
         # Create plot df for missing values
         plot = []
@@ -492,29 +527,14 @@ class TemplateListener():
             
         # For protection.
         plot.append(self.plot_protect)
-                        
+                       
         if len(plot) != 0:
             plot_merge_task = pd.concat(plot)
             #semi_plot = pd.concat([plot_merge_task, new_plot]).sort_values(["Task", "Start"]).reset_index(drop=True)
-            #plot_merge_task = self.rebuild_plot_df(semi_plot)            
-        
+            #plot_merge_task = self.rebuild_plot_df(semi_plot) 
+            
         # Handle upgraded unknown protection while it doesn't expire.
-        tasks = plot_merge_task["Task"].unique()
-        if "Unknown protection" in tasks:
-            unknown_start = plot_merge_task[plot_merge_task["Task"] == "Unknown protection"].iloc[0].iloc[1]
-            unknown_end = plot_merge_task[plot_merge_task["Task"] == "Unknown protection"].iloc[0].iloc[2]
-            unknown_end_idx = plot_merge_task[plot_merge_task["Task"] == "Unknown protection"].iloc[0].name
-            if "Semi-protection" in tasks:
-                protect_start = plot_merge_task[plot_merge_task["Task"] == "Semi-protection"].iloc[-1].iloc[1]
-            elif "Full-protection" in tasks:
-                protect_start = plot_merge_task[plot_merge_task["Task"] == "Full-protection"].iloc[-1].iloc[1]
-            if (unknown_end > protect_start) & (protect_start > unknown_start):
-                plot_merge_task.loc[unknown_end_idx, "Finish"] = protect_start
-            else:
-                pass
-        else:
-            pass
-        
+        tasks = plot_merge_task["Task"].unique()        
             
         if self.lng == "en":
             plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", 
@@ -534,14 +554,14 @@ class TemplateListener():
         else:
             templates_color = {"Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
         
-#         if len(missing_revs) !=0:
-#             display(md("**Warning: there are perhaps missing records for template editing!**")) 
-#             display(md("The following revisions are possibly missing:"))                
-#             display(qgrid.show_grid(missing_revs))
-#         else:
-#             pass
-                
-        if len(plot) != 0:
+        if len(missing_revs) !=0:
+            display(md("**Warning: there are perhaps missing records for template editing!**")) 
+            display(md("The following revisions are possibly missing:"))                
+            display(qgrid.show_grid(missing_revs))
+        else:
+            pass
+        
+        if len(self.plot) != 0:
             display(md("The following revisions are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
