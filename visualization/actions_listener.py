@@ -1,6 +1,8 @@
 import pandas as pd
 import plotly
 from plotly import graph_objs
+from plotly.subplots import make_subplots
+from ipywidgets.widgets import Output
 
 from metrics.token import TokensManager
 
@@ -134,10 +136,20 @@ class ActionsListener():
     
     
     def listen(self, _range1, _range2, editor, granularity,
-               black, red, blue, green):
+               black, red, blue, green, black_conflict, red_conflict):
         
         df = self.df[(self.df.rev_time.dt.date >= _range1) &
                 (self.df.rev_time.dt.date <= _range2)]
+        
+        df_conflict = df.groupby(pd.Grouper(
+            key='rev_time', freq=granularity[0])).agg({'conflicts': ['sum'],
+                                       'elegibles': ['sum'],
+                                       'revisions': ['sum'],
+                                       'conflict': ['count', 'sum']}).reset_index()
+        self.traces = {}
+        df_conflict = self.__add_trace(df_conflict, black_conflict, 'rgba(0, 0, 0, 1)')
+        df_conflict = self.__add_trace(df_conflict, red_conflict, 'rgba(255, 0, 0, .8)')
+        
 
         if editor != 'All':
             df = df[df[self.editor_column] == editor]
@@ -148,42 +160,85 @@ class ActionsListener():
         else:
             df = df.groupby(pd.Grouper(
                 key='rev_time', freq=granularity[0])).sum().reset_index()
-
-        data = [
-            graph_objs.Scatter(
+        
+        fig = make_subplots(rows=2, cols=1, start_cell="bottom-left", shared_xaxes=True, vertical_spacing=0.05)
+        
+        fig.add_trace(graph_objs.Scatter(
                 x=df['rev_time'], y=df[black],
                 name=black,
-                marker=dict(color='rgba(0, 0, 0, 1)'))
-        ]
+                marker=dict(color='rgba(0, 0, 0, 1)')), row=2, col=1)
 
         if red != 'None':
-            data.append(graph_objs.Scatter(
+            fig.add_trace(graph_objs.Scatter(
                 x=df['rev_time'], y=df[red],
                 name=red,
-                marker=dict(color='rgba(255, 0, 0, .8)')))
+                marker=dict(color='rgba(255, 0, 0, .8)')), row=2, col=1)
 
         if blue != 'None':
-            data.append(graph_objs.Scatter(
+            fig.add_trace(graph_objs.Scatter(
                 x=df['rev_time'], y=df[blue],
                 name=blue,
-                marker=dict(color='rgba(0, 153, 255, .8)')))           
+                marker=dict(color='rgba(0, 153, 255, .8)')), row=2, col=1)          
 
         if green != 'None':
-            data.append(graph_objs.Scatter(
+            fig.add_trace(graph_objs.Scatter(
                 x=df['rev_time'], y=df[green],
                 name=green,
-                marker=dict(color='rgba(0, 128, 43, 1)')))
+                marker=dict(color='rgba(0, 128, 43, 1)')), row=2, col=1)
+            
+        if black_conflict != "None":
+            fig.add_trace(self.traces[black_conflict], row=1, col=1)
+            
+        if red_conflict != "None":
+            fig.add_trace(self.traces[red_conflict], row=1, col=1)
 
         self.df_plotted = df
-
-        layout = graph_objs.Layout(hovermode='closest',
-                                   xaxis=dict(title=granularity, ticklen=5,
-                                              zeroline=True, gridwidth=2),
-                                   yaxis=dict(title='Actions',
-                                              ticklen=5, gridwidth=2),
-                                   legend=dict(x=0.5, y=1.2),
-                                   showlegend=True, barmode='group')
-
-        plotly.offline.init_notebook_mode(connected=True)        
-        plotly.offline.iplot({"data": data, "layout": layout})
+        self.df_conflict_plot = df_conflict
         
+        fig.update_yaxes(title_text="Actions", row=2, col=1)
+        fig.update_yaxes(title_text="Conflict Scores / Elegible Actions", row=1, col=1)
+        fig.update_layout(
+            hovermode='closest',
+            xaxis=dict(title=granularity, ticklen=5, zeroline=True, gridwidth=2),
+            #yaxis=dict(title='Actions', ticklen=5, gridwidth=2),
+            legend=dict(x=0.5, y=1.2),
+            showlegend=True, 
+            barmode='group',
+            height=600,
+            legend_orientation="h"
+          )
+        
+        fig.show()
+        
+        
+        
+    
+    def __add_trace(self, df, metric, color):
+        sel = df.index
+        if metric == 'None':
+            return df
+        elif metric == 'Conflict Score':
+            df['conflict_score'] = df[
+                ('conflict', 'sum')] / df[('elegibles', 'sum')]
+            sel = ~df['conflict_score'].isnull()
+            y = df.loc[sel, 'conflict_score']
+            self.is_norm_scale = False
+
+        elif metric == 'Absolute Conflict Score':
+            df['absolute_conflict_score'] = df[('conflict', 'sum')]
+            sel = ~df['absolute_conflict_score'].isnull() 
+            y = df.loc[sel, 'absolute_conflict_score']
+            self.is_norm_scale = False
+
+        elif metric == 'Total Elegible Actions':
+            df['elegibles_n'] = df[('elegibles', 'sum')]
+            sel = df['elegibles_n'] != 0
+            y = df.loc[sel, 'elegibles_n']
+            self.is_norm_scale = False
+        
+        self.traces[metric] = graph_objs.Bar(
+            x=df.loc[sel,'rev_time'], y=y,
+            name=metric, marker_color=color
+        )
+
+        return df
