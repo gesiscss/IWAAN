@@ -196,7 +196,7 @@ class ActionsListener():
         self.df_conflict_plot = df_conflict
         
         fig.update_yaxes(title_text="Actions", row=2, col=1)
-        fig.update_yaxes(title_text="Conflict Scores / Elegible Actions", row=1, col=1)
+        fig.update_yaxes(title_text="Conflict Scores", row=1, col=1)
         fig.update_layout(
             hovermode='closest',
             xaxis=dict(title=granularity, ticklen=5, zeroline=True, gridwidth=2),
