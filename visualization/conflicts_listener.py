@@ -267,9 +267,9 @@ class ConflictsEditorListener():
     
     def __init__(self, sources, editor_names):
         self.sources = sources
-        self.token_source = self.sources["conflict_manager"].all_actions.copy()
-        self.token_conflict = self.sources["conflict_manager"].conflicts.copy()
-        self.token_elegible = self.sources["conflict_manager"].elegible_actions.copy()
+        self.token_source = self.sources["conflict_manager"].all_actions
+        self.token_conflict = self.sources["conflict_manager"].conflicts
+        self.token_elegible = self.sources["conflict_manager"].elegible_actions
         self.editor_names = editor_names
         
         self.qg_obj = None
@@ -361,12 +361,19 @@ class ConflictsEditorListener():
     
     
     def __get_main_opponent(self, editor_id, token_indices, editor_dict):
-        conflict_actions = self.sources["conflict_manager"].get_conflicting_actions(editor_id)
-
+        elegible_actions = self.token_elegible.copy()
+        all_actions = self.token_source.copy()
+        
         main_opponents = []
         for token_id in token_indices:
-            conflict_token = conflict_actions[conflict_actions["token_id"] == token_id].sort_values("conflict", ascending=False)
-            main_opponents.append(conflict_token.iloc[[0]][["token_id", "editor"]].set_index("token_id"))
+            elegible_token = elegible_actions[elegible_actions["token_id"] == token_id].set_index("rev_id")
+            all_token = all_actions[all_actions["token_id"] == token_id].set_index("rev_id")
+            merged_token = all_token.merge(elegible_token, how="left")
+            
+            sort_token = merged_token[merged_token["editor"] == editor_id].sort_values("conflict", ascending=False)
+            opponent_idx = sort_token.iloc[[0]].index - 1
+            opponent_df = merged_token.loc[opponent_idx]
+            main_opponents.append(opponent_df[["token_id", "editor"]].set_index("token_id"))
 
         main_opponents = pd.concat(main_opponents)
         main_opponents.replace((editor_dict), inplace=True)
@@ -411,6 +418,7 @@ class ConflictsEditorListener():
             selected_df = selected_df.merge(selected_elegible_tokens[["token_id", "token"]].drop_duplicates().set_index("token_id"), 
                             on="token_id")[["token", "elegibles", "conflicts", "conflict", "revisions", "in_actions", "out_actions"]]
             selected_df = selected_df[selected_df["conflict"] != 0]
+            
 
             # Find the main opponent for each token.
             editor_to_id = self.get_editor_month()[["editor_id", "name"]]
