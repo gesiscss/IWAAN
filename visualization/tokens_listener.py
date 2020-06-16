@@ -82,7 +82,7 @@ class TokensListener():
         #extract editor name and timestamp to display before the table
         editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == int(self.token_source[self.token_source['rev_id']==self.rev_id]['editor'].values[0]), 'name'].values[0]
         timestamp = pd.DatetimeIndex(self.token_source[self.token_source['rev_id']==self.rev_id]['rev_time'])[0]
-        display(md(f"***Selected revision: ID: {self.rev_id}, editor name: {str(editor_name)}, timestamp: {str(timestamp.date()) + " " + str(timestamp.time())}***"))
+        display(md(f"***Selected revision: ID: {self.rev_id}, editor name: {str(editor_name)}, timestamp: {str(timestamp.date())} {str(timestamp.time())}***"))
                    
         # Print URL to wikipedia diff.
         url = f"https://{self.lng}.wikipedia.org/w/index.php?title={self.the_page['title']}&diff={self.rev_id}"
