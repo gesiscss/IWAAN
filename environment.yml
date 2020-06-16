@@ -18,3 +18,4 @@ dependencies:
     - multidict
     - jupyter_contrib_nbextensions
     - keyboard
+    - tqdm
