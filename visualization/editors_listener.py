@@ -5,7 +5,8 @@ import pandas as pd
 
 import qgrid
 
-from IPython.display import display, clear_output
+from IPython.display import display, clear_output, Markdown as md
+from ipywidgets import Output
 
 # Some auxiliary functions for date filtering
 
@@ -46,21 +47,36 @@ def within_month(series, some_date):
     
     return mask_in_year & mask_in_month
 
+def merged_tokens_and_elegibles(elegibles, tokens):
+    elegible_token = elegibles.set_index("rev_id")
+    comp_tokens = tokens.copy()
+    comp_tokens["revision"] = comp_tokens["rev_id"].astype(str)
+    comp_tokens = comp_tokens.set_index("rev_id")
+    tokens_with_conflict = comp_tokens.merge(elegible_token, how="left")
+    
+    return tokens_with_conflict
+    
+
 
 class EditorsListener:
     
     def __init__(self, sources):
         self.df = sources["agg_actions"]
         self.elegibles = sources["elegibles"]
-        self.all_tokens = sources["token"]
+        self.tokens = sources["tokens"]
+        self.all_elegibles = sources["all_elegibles"]
+        self.all_tokens = sources["all_tokens"]
         self.names_id = dict(zip(sources["agg_actions"]["editor_str"], sources["agg_actions"]["editor"]))
         
-        elegible_token = self.elegibles.set_index("rev_id")
-        comp_tokens = sources["token"].copy()
-        comp_tokens["revision"] = comp_tokens["rev_id"].astype(str)
-        comp_tokens = comp_tokens.set_index("rev_id")
-        self.tokens_with_conflict = comp_tokens.merge(elegible_token, how="left") 
-    
+        print("Initializing...")
+        self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
+        self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
+        
+        self.revision_manager = RevisionsManager(self.actions, self.all_actions)
+        
+        clear_output()
+        
+        
     def get_infos(self):
         monthly_df = self.get_ratios(self.df, freq="M")
         monthly_dict = self.get_daily_tokens(monthly_df, self.all_tokens)
@@ -209,7 +225,7 @@ class EditorsListener:
         avg_reac_info = {}
         for key, value in tqdm(monthly_tokens.items()):
             if len(value) != 0:
-                opponents = self.get_opponents(value, self.tokens_with_conflict)
+                opponents = self.get_opponents(value, self.actions)
 
                 if len(opponents) != 0:
                     opponents["same_day"], opponents["same_week"], opponents["same_month"] = [same_day(opponents).astype(int),                                                                 same_week(opponents).astype(int), same_month(opponents).astype(int)]
@@ -270,17 +286,116 @@ class EditorsListener:
         return final_df
     
     
-    def listen(self, granularity):
+    def on_select_revision(self, change):
+        self.selected_rev = self.second_qgrid.get_selected_df()["revision"].iloc[0]
+    
+    def on_select_change(self, change):
+        with self.out:
+            clear_output()
+            date_selected = self.qgrid_obj.get_selected_df().reset_index()["rev_time"].iloc[0]
+            editor_selected = self.qgrid_obj.get_selected_df().reset_index()["editor_id"].iloc[0]
+            editor_name = self.qgrid_obj.get_selected_df().reset_index()["editor"].iloc[0]
+            display(md(f"Within **{self.current_freq}** timeframe, you have selected **{editor_name}** (id: {editor_selected})"))
+            display(md(f"The revisions fall in **{str(date_selected)}**"))
+
+            second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
+            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': False})
+            display(self.second_qgrid)
+            self.second_qgrid.observe(self.on_select_revision, names=['_selected_rows'])
+        
+    
+    def listen(self, granularity):        
         df_from_agg = self.get_ratios(self.df, freq=granularity)
         df_from_agg = df_from_agg.rename({"editor_str": "editor_id"}, axis=1)
         df_display = self.merge_main(df_from_agg, freq=granularity)
         df_display["conflict"] = (df_display["conflict"] / df_display["elegibles"]).fillna(0)
-        qgrid_obj = qgrid.show_grid(df_display[["rev_time", "editor", 
+        self.qgrid_obj = qgrid.show_grid(df_display[["rev_time", "editor", 
                                   "adds", "dels", "reins",
                                    "productivity", "conflict",
                                    "stopwords_ratio", "main_opponent",
                                    "avg_reac_time", "revisions", "editor_id"]].set_index("rev_time").sort_index(ascending=False),
                                    grid_options={'forceFitColumns':False})
         
-        display(qgrid_obj)
+        display(self.qgrid_obj)
+        self.out = Output()
+        display(self.out)
+        
+        self.current_freq = granularity
+        self.qgrid_obj.observe(self.on_select_change, names=['_selected_rows'])
+        
+        
+class RevisionsManager:
+    
+    def __init__(self, merged_actions, merged_all_actions):
+        self.actions_ex_stop = merged_actions
+        self.actions_inc_stop = merged_all_actions
+        
+    def get_main(self, selected_date, selected_editor, freq):
+        editor_revs_all = self.get_filtered_df(self.actions_inc_stop, selected_date, selected_editor, freq).reset_index(drop=True)
+        editor_revs = self.get_filtered_df(self.actions_ex_stop, selected_date, selected_editor, freq).reset_index(drop=True)
+        
+        editor_revs_sum_all = self.get_revisions_stat(editor_revs_all, editor_revs)
+        editor_revs_sum = self.get_revisions_stat(editor_revs, editor_revs)
+        
+        df_display = self.get_final(editor_revs_sum_all, editor_revs_sum)
+        
+        return df_display
+        
+    def get_filtered_df(self, df, input_date, editor, freq):
+        years = df["rev_time"].dt.year
+        months = df["rev_time"].dt.month
+        days = df["rev_time"].dt.day
+
+        mask_year = years == input_date.year
+        mask_month = months == input_date.month
+        mask_editor = df["editor"] == editor
+
+        if freq == "Monthly":
+            filtered_df = df.loc[mask_year & mask_month & mask_editor]
+        elif freq == "Weekly":
+            date_diff = input_date - df["rev_time"].dt.date
+            mask_within_week = (date_diff <= timedelta(days=6)) & (timedelta(days=0) <= date_diff)
+            filtered_df = df.loc[mask_within_week & mask_editor]
+        else:
+            mask_day = days == input_date.day
+            filtered_df = df.loc[mask_year & mask_month & mask_day & mask_editor]
+
+        return filtered_df
+    
+    
+    def get_revisions_stat(self, df_tf, df_tf_no_stopwords):
+        editor_revs_tf = df_tf.copy()
+        editor_revs_tf["o_rev_id"] = editor_revs_tf["o_rev_id"].astype(str)
+        mask_adds = editor_revs_tf["o_rev_id"] == editor_revs_tf["revision"]
+        mask_reins = (editor_revs_tf["action"] == "in") & (~mask_adds)
+        mask_dels = editor_revs_tf["action"] == "out"
+        mask_stopwords = ~editor_revs_tf["token"].isin(df_tf_no_stopwords["token"].unique())
+        mask_survival = ~(editor_revs_tf["time_diff"].dt.days.fillna(100) < 2)
+        editor_revs_tf["adds"], editor_revs_tf["dels"], editor_revs_tf["reins"] = [mask_adds.astype(int),
+                                                       mask_dels.astype(int), mask_reins.astype(int)]
+        editor_revs_tf["stopwords"] = mask_stopwords.astype(int)
+        editor_revs_tf["adds_survive"] = (mask_adds & mask_survival).astype(int)
+        editor_revs_tf["dels_survive"] = (mask_dels & mask_survival).astype(int)
+        editor_revs_tf["reins_survive"] = (mask_reins & mask_survival).astype(int)
+
+        return editor_revs_tf
+    
+    
+    def get_final(self, revs_all, revs):
+        revs_stats_all = revs_all.groupby(["revision", "rev_time"]).agg({"adds": "sum", "dels": "sum", "reins": "sum", "stopwords": "sum",
+                                               "adds_survive": "sum", "dels_survive": "sum", "reins_survive": "sum"}).reset_index()
+
+        revs_stats = revs.groupby(["revision", "rev_time"]).agg({"adds": "sum", "dels": "sum", "reins": "sum", "stopwords": "sum",
+                                 "adds_survive": "sum", "dels_survive": "sum", "reins_survive": "sum","conflict": "sum"}).reset_index()
+        revs_stats_all["conflict"] = revs_stats["conflict"] / (revs_stats["dels"] + revs_stats["reins"])
+        revs_stats_all["conflict"] = revs_stats_all["conflict"].fillna(0)
+
+        revs_stats_all["productivity"] = revs_stats_all.loc[:, "adds_survive": "reins_survive"].sum(axis=1) / revs_stats_all.loc[:, "adds": "reins"].sum(axis=1)
+        revs_stats_all["stopwords_ratio"] = revs_stats_all["stopwords"] / revs_stats_all.loc[:, "adds": "reins"].sum(axis=1)
+
+        display_df = revs_stats_all[["revision", "rev_time", "adds", "dels", "reins", "productivity", "conflict", "stopwords_ratio"]].sort_values("rev_time", ascending=False).set_index("rev_time")
+
+        return display_df
+        
+        
         
