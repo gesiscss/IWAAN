@@ -72,7 +72,7 @@ class EditorsListener:
         self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
         
-        self.revision_manager = RevisionsManager(self.actions, self.all_actions)
+        self.revision_manager = RevisionsManager(self.df, self.all_actions)
         
         clear_output()
         
@@ -314,21 +314,28 @@ class EditorsListener:
         
 class RevisionsManager:
     
-    def __init__(self, merged_actions, merged_all_actions):
-        self.actions_ex_stop = merged_actions
+    def __init__(self, agg, merged_all_actions):
+        self.agg_actions = agg
         self.actions_inc_stop = merged_all_actions
         
     def get_main(self, selected_date, selected_editor, freq):
-        editor_revs_all = self.get_filtered_df(self.actions_inc_stop, selected_date, selected_editor, freq).reset_index(drop=True)
-        editor_revs = self.get_filtered_df(self.actions_ex_stop, selected_date, selected_editor, freq).reset_index(drop=True)
-        
-        editor_revs_sum_all = self.get_revisions_stat(editor_revs_all, editor_revs)
-        editor_revs_sum = self.get_revisions_stat(editor_revs, editor_revs)
-        
-        df_display = self.get_final(editor_revs_sum_all, editor_revs_sum)
+        agg = self.add_revision_id()
+        filtered_df = self.get_filtered_df(agg, selected_date, selected_editor, freq).reset_index(drop=True)
+        df_display = self.get_ratios(filtered_df)
         
         return df_display
-        
+
+    def add_revision_id(self):
+        no_dup_actions = self.actions_inc_stop.drop_duplicates("revision").reset_index(drop=True)
+        no_dup_actions["rev_time"] = no_dup_actions["rev_time"].astype("datetime64[ns]")
+        revs_to_merged = no_dup_actions[["rev_time", "revision"]]
+        agg_with_revs = self.agg_actions.merge(revs_to_merged, on="rev_time", how="left")
+        agg_with_revs.insert(1, "rev_id", agg_with_revs["revision"])
+        agg_with_revs = agg_with_revs.drop("revision", axis=1).sort_values("rev_time").reset_index(drop=True)
+
+        return agg_with_revs
+    
+    
     def get_filtered_df(self, df, input_date, editor, freq):
         years = df["rev_time"].dt.year
         months = df["rev_time"].dt.month
@@ -336,7 +343,7 @@ class RevisionsManager:
 
         mask_year = years == input_date.year
         mask_month = months == input_date.month
-        mask_editor = df["editor"] == editor
+        mask_editor = df["editor_str"] == editor
 
         if freq == "Monthly":
             filtered_df = df.loc[mask_year & mask_month & mask_editor]
@@ -351,39 +358,15 @@ class RevisionsManager:
         return filtered_df
     
     
-    def get_revisions_stat(self, df_tf, df_tf_no_stopwords):
-        editor_revs_tf = df_tf.copy()
-        editor_revs_tf["o_rev_id"] = editor_revs_tf["o_rev_id"].astype(str)
-        mask_adds = editor_revs_tf["o_rev_id"] == editor_revs_tf["revision"]
-        mask_reins = (editor_revs_tf["action"] == "in") & (~mask_adds)
-        mask_dels = editor_revs_tf["action"] == "out"
-        mask_stopwords = ~editor_revs_tf["token"].isin(df_tf_no_stopwords["token"].unique())
-        mask_survival = ~(editor_revs_tf["time_diff"].dt.days.fillna(100) < 2)
-        editor_revs_tf["adds"], editor_revs_tf["dels"], editor_revs_tf["reins"] = [mask_adds.astype(int),
-                                                       mask_dels.astype(int), mask_reins.astype(int)]
-        editor_revs_tf["stopwords"] = mask_stopwords.astype(int)
-        editor_revs_tf["adds_survive"] = (mask_adds & mask_survival).astype(int)
-        editor_revs_tf["dels_survive"] = (mask_dels & mask_survival).astype(int)
-        editor_revs_tf["reins_survive"] = (mask_reins & mask_survival).astype(int)
+    def get_ratios(self, filtered_agg):    
+        filtered_agg["productivity"] = filtered_agg["total_surv_48h"] / filtered_agg["total"]
+        filtered_agg["stopwords_ratio"] = filtered_agg["total_stopword_count"] / filtered_agg["total"]
+        filtered_agg["conflict"] = filtered_agg["conflict"] / filtered_agg["elegibles"]
+        filtered_agg["conflict"] = filtered_agg["conflict"].fillna(0)
+        to_display = filtered_agg[["rev_time", "rev_id", "adds", "dels",
+                       "reins", "productivity", "conflict", "stopwords_ratio"]].set_index("rev_time")
 
-        return editor_revs_tf
-    
-    
-    def get_final(self, revs_all, revs):
-        revs_stats_all = revs_all.groupby(["revision", "rev_time"]).agg({"adds": "sum", "dels": "sum", "reins": "sum", "stopwords": "sum",
-                                               "adds_survive": "sum", "dels_survive": "sum", "reins_survive": "sum"}).reset_index()
-
-        revs_stats = revs.groupby(["revision", "rev_time"]).agg({"adds": "sum", "dels": "sum", "reins": "sum", "stopwords": "sum",
-                                 "adds_survive": "sum", "dels_survive": "sum", "reins_survive": "sum","conflict": "sum"}).reset_index()
-        revs_stats_all["conflict"] = revs_stats["conflict"] / (revs_stats["dels"] + revs_stats["reins"])
-        revs_stats_all["conflict"] = revs_stats_all["conflict"].fillna(0)
-
-        revs_stats_all["productivity"] = revs_stats_all.loc[:, "adds_survive": "reins_survive"].sum(axis=1) / revs_stats_all.loc[:, "adds": "reins"].sum(axis=1)
-        revs_stats_all["stopwords_ratio"] = revs_stats_all["stopwords"] / revs_stats_all.loc[:, "adds": "reins"].sum(axis=1)
-
-        display_df = revs_stats_all[["revision", "rev_time", "adds", "dels", "reins", "productivity", "conflict", "stopwords_ratio"]].sort_values("rev_time", ascending=False).set_index("rev_time")
-
-        return display_df
+        return to_display
         
         
         
