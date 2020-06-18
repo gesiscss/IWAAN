@@ -78,8 +78,7 @@ class EditorsListener:
         
         
     def get_infos(self):
-        monthly_df = self.get_ratios(self.df, freq="M")
-        monthly_dict = self.get_daily_tokens(monthly_df, self.all_tokens)
+        monthly_dict = self.get_daily_tokens(self.tokens)
         opponent_info, scores_info, reac_info = self.calculate(monthly_dict)
         self.sort_by_granularity(scores_info, reac_info)
         
@@ -103,31 +102,20 @@ class EditorsListener:
         return df_ratios
     
     
-    def get_daily_tokens(self, df, tokens_source, only_date=False):
-        tokens_dict = {}
-        for idx, row in df.iterrows():
+    def get_daily_tokens(self, tokens_source):
+        no_dup_tokens = tokens_source.drop_duplicates(["rev_id", "rev_time"]).reset_index(drop=True)
+        no_dup_tokens["rev_id"] = no_dup_tokens["rev_id"].astype(str)
+        no_dup_tokens = no_dup_tokens.sort_values("rev_time").reset_index(drop=True)
+        no_dup_tokens["mark_month"] = no_dup_tokens["rev_time"].astype("datetime64[ns]").dt.to_period('M')
+        no_dup_tokens["mark"] = list(zip(no_dup_tokens["mark_month"], no_dup_tokens["editor"]))
 
-            # Filter the tokens out.
-            editor_id = row["editor_str"]
-            year, month, day = row["rev_time"].year, row["rev_time"].month, row["rev_time"].day
-            mask_date = within_month(tokens_source["rev_time"], date(year, month, day))
-            mask_editor = tokens_source["editor"] == editor_id
+        merge_tokens = no_dup_tokens[["mark", "rev_id"]]
+        retrieval_dict = dict(merge_tokens.groupby("mark")["rev_id"].apply(list))
 
-            if only_date:
-                mask_selected = mask_date
-            else:
-                mask_selected = mask_date & mask_editor
-
-            tokens = tokens_source.loc[mask_selected].reset_index(drop=True)
-            tokens_dict[idx] = tokens
-
-        return tokens_dict
+        return retrieval_dict
     
     
-    def get_opponents(self, df, tokens_df):
-        # Extract revs info.
-        revs_list = df["rev_id"].astype(str).unique()
-
+    def get_opponents(self, revs_list, tokens_df):
         # Filter out the tokens edited by this editor in those revs.
         mask_rev = tokens_df["revision"].isin(revs_list)
         conflicts_filter = tokens_df.loc[mask_rev].dropna()  # .dropna() aims to eliminate self-editing
