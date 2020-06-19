@@ -8,6 +8,8 @@ import qgrid
 from IPython.display import display, clear_output, Markdown as md
 from ipywidgets import Output
 
+from external.ores import ORESAPI, ORESDV
+
 # Some auxiliary functions for date filtering
 
 def same_month(oppo_df):
@@ -60,19 +62,20 @@ def merged_tokens_and_elegibles(elegibles, tokens):
 
 class EditorsListener:
     
-    def __init__(self, sources):
+    def __init__(self, sources, lng):
         self.df = sources["agg_actions"]
         self.elegibles = sources["elegibles"]
         self.tokens = sources["tokens"]
         self.all_elegibles = sources["all_elegibles"]
         self.all_tokens = sources["all_tokens"]
         self.names_id = dict(zip(sources["agg_actions"]["editor_str"], sources["agg_actions"]["editor"]))
+        self.lng=lng
         
         print("Initializing...")
         self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
         
-        self.revision_manager = RevisionsManager(self.df, self.all_actions)
+        self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, self.lng)
         
         clear_output()
         
@@ -314,16 +317,26 @@ class EditorsListener:
         
 class RevisionsManager:
     
-    def __init__(self, agg, merged_all_actions):
+    def __init__(self, agg, merged_all_actions, merged_actions, lng):
         self.agg_actions = agg
+        self.names_dict = agg[["editor_str", "editor"]].drop_duplicates().set_index("editor_str")["editor"].to_dict()
+        
         self.actions_inc_stop = merged_all_actions
+        self.actions_exc_stop = merged_actions
+        
+        self.lng=lng
+        
         
     def get_main(self, selected_date, selected_editor, freq):
         agg = self.add_revision_id()
         filtered_df = self.get_filtered_df(agg, selected_date, selected_editor, freq).reset_index(drop=True)
-        df_display = self.get_ratios(filtered_df)
+        df_ratios = self.get_ratios(filtered_df).reset_index()
+        df_opponents = self.get_rev_conflict_reac(df_ratios)
+        df_merge1 = df_ratios.merge(df_opponents, on="rev_id", how="left")
+        df_ores = self.get_ores(df_merge1)
+        df_merge2 = df_merge1.merge(df_ores, on="rev_id", how="left").set_index("rev_time")
         
-        return df_display
+        return df_merge2
 
     def add_revision_id(self):
         no_dup_actions = self.actions_inc_stop.drop_duplicates("revision").reset_index(drop=True)
@@ -367,6 +380,46 @@ class RevisionsManager:
                        "reins", "productivity", "conflict", "stopwords_ratio"]].set_index("rev_time")
 
         return to_display
+    
+    
+    def get_most_conflict_from_rev(self, rev_df):    
+        sort_rev = rev_df.sort_values("conflict", ascending=False)
+        rev = sort_rev["revision"].unique()[0]
+
+        token_most_conflict = sort_rev.iloc[0]["token_id"]
+        token_history = self.actions_exc_stop[self.actions_exc_stop["token_id"] == token_most_conflict]
+        idx_this_token = token_history[token_history["revision"] == rev].index
+        main_opponent_id = token_history.loc[idx_this_token - 1]["editor"].iloc[0]
+        main_opponent = self.names_dict[main_opponent_id]
+
+        min_react = str(sort_rev.iloc[0]["time_diff"])
+
+        return main_opponent, min_react
+    
+    
+    def get_rev_conflict_reac(self, df_agg):
+        df_agg = df_agg.loc[~(df_agg["conflict"] == 0)]
+        second_revs = df_agg["rev_id"].values
+
+        rev_conflicts = pd.DataFrame(columns=["rev_id", "main_opponent", "min_react"])
+        for idx, rev in enumerate(second_revs):
+            some_rev = self.actions_exc_stop[self.actions_exc_stop["revision"] == rev]
+            if len(some_rev) != 0:
+                rev_conflicts.loc[idx] = [rev] + list(self.get_most_conflict_from_rev(some_rev))
+                
+        return rev_conflicts
+    
+    
+    def get_ores(self, merge1):
+        # Revsion list
+        revs_list = merge1["rev_id"].values
+        
+        # Use ORESAPI
+        ores_dv = ORESDV(ORESAPI(lng=self.lng))
+        ores_df = ores_dv.get_goodfaith_damage(revs_list)
+        
+        return ores_df
+        
         
         
         
