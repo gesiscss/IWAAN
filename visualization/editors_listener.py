@@ -5,7 +5,7 @@ import pandas as pd
 
 import qgrid
 
-from IPython.display import display, clear_output, Markdown as md
+from IPython.display import display, clear_output, Markdown as md, HTML
 from ipywidgets import Output
 
 from external.ores import ORESAPI, ORESDV
@@ -278,7 +278,10 @@ class EditorsListener:
     
     
     def on_select_revision(self, change):
-        self.selected_rev = self.second_qgrid.get_selected_df()["revision"].iloc[0]
+        with self.out2:
+            clear_output()
+            self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
+            display(HTML(f"<a href='https://{self.lng}.wikipedia.org/w/index.php?diff={self.selected_rev}&title=TITLEDOESNTMATTER&diffmode=source' target='_blank'>Cilck here to check revisions differences</a>"))
     
     def on_select_change(self, change):
         with self.out:
@@ -286,12 +289,20 @@ class EditorsListener:
             date_selected = self.qgrid_obj.get_selected_df().reset_index()["rev_time"].iloc[0]
             editor_selected = self.qgrid_obj.get_selected_df().reset_index()["editor_id"].iloc[0]
             editor_name = self.qgrid_obj.get_selected_df().reset_index()["editor"].iloc[0]
+            page_title = self.actions["article_title"].unique()[0]
             display(md(f"Within **{self.current_freq}** timeframe, you have selected **{editor_name}** (id: {editor_selected})"))
-            display(md(f"The revisions fall in **{str(date_selected)}**"))
+            display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={self.actions['article_title'].unique()[0]}&action=history' target='_blank'>{date_selected}</a>"))
 
             second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
-            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': False})
+            columns_set = {"rev_time": {"width": 150}, "rev_id": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
+               "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
+               "stopwords_ratio": {"width": 125}, "main_opponent": {"width": 120}, "min_react": {"width": 90},
+               "Damaging": {"width": 90}, "Goodfaith": {"width": 90}}
+            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': False}, column_definitions=columns_set)
             display(self.second_qgrid)
+            
+            self.out2 = Output()
+            display(self.out2)
             self.second_qgrid.observe(self.on_select_revision, names=['_selected_rows'])
         
     
@@ -300,12 +311,17 @@ class EditorsListener:
         df_from_agg = df_from_agg.rename({"editor_str": "editor_id"}, axis=1)
         df_display = self.merge_main(df_from_agg, freq=granularity)
         df_display["conflict"] = (df_display["conflict"] / df_display["elegibles"]).fillna(0)
-        self.qgrid_obj = qgrid.show_grid(df_display[["rev_time", "editor", 
-                                  "adds", "dels", "reins",
-                                   "productivity", "conflict",
-                                   "stopwords_ratio", "main_opponent",
-                                   "avg_reac_time", "revisions", "editor_id"]].set_index("rev_time").sort_index(ascending=False),
-                                   grid_options={'forceFitColumns':False})
+        
+        displayed = df_display[["rev_time", "editor", 
+                      "adds", "dels", "reins",
+                       "productivity", "conflict",
+                       "stopwords_ratio", "main_opponent",
+                       "avg_reac_time", "revisions", "editor_id"]].set_index("rev_time").sort_index(ascending=False)
+        columns_set = {"rev_time": {"width": 85}, "editor": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
+                       "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
+                       "stopwords_ratio": {"width": 125}, "main_opponent": {"width": 120}, "avg_reac_time": {"width": 115},
+                       "revisions": {"width": 80}, "editor_id": {"width": 80}}
+        self.qgrid_obj = qgrid.show_grid(displayed, grid_options={'forceFitColumns':False}, column_definitions=columns_set)
         
         display(self.qgrid_obj)
         self.out = Output()
