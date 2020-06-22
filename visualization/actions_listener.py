@@ -154,12 +154,12 @@ class ActionsListener():
         if editor != 'All':
             df = df[df[self.editor_column] == editor]
             
-        if granularity[0] != "D":
-            df = df.groupby(pd.Grouper(
-                key='rev_time', freq=granularity[0]+'S')).sum().reset_index()
-        else:
+        if (granularity[0] == "D") or (granularity[0] == "W"):
             df = df.groupby(pd.Grouper(
                 key='rev_time', freq=granularity[0])).sum().reset_index()
+        else:
+            df = df.groupby(pd.Grouper(
+                key='rev_time', freq=granularity[0]+'S')).sum().reset_index()
         
         fig = make_subplots(rows=2, cols=1, start_cell="bottom-left", shared_xaxes=True, vertical_spacing=0.05)
         

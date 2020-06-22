@@ -83,6 +83,7 @@ class EditorsListener:
     def get_infos(self):
         monthly_dict = self.get_daily_tokens(self.tokens)
         opponent_info, scores_info, reac_info = self.calculate(monthly_dict)
+        self.test_opponent = opponent_info
         self.sort_by_granularity(scores_info, reac_info)
         
         clear_output()
@@ -182,9 +183,13 @@ class EditorsListener:
         display_cols = ["idx_editor", "editor", "oppo_time", "conflict", "edit_time", "time_diff", "revision"]
 
         if len(oppo_df) != 0:       
-            tf_oppo_month = oppo_df.loc[oppo_df["same_month"] == 1][display_cols]
-            tf_oppo_week = oppo_df.loc[oppo_df["same_week"] == 1][display_cols]
-            tf_oppo_day = oppo_df.loc[oppo_df["same_day"] == 1][display_cols]
+#             tf_oppo_month = oppo_df.loc[oppo_df["same_month"] == 1][display_cols]
+#             tf_oppo_week = oppo_df.loc[oppo_df["same_week"] == 1][display_cols]
+#             tf_oppo_day = oppo_df.loc[oppo_df["same_day"] == 1][display_cols]
+            
+            tf_oppo_month = oppo_df[display_cols]
+            tf_oppo_week = oppo_df[display_cols]
+            tf_oppo_day = oppo_df[display_cols]
 
             # Month
             conflict_scores_month = self.rank_conflict_under_tf(tf_oppo_month, freq="M")
@@ -218,8 +223,8 @@ class EditorsListener:
             if len(value) != 0:
                 opponents = self.get_opponents(value, self.actions)
 
-                if len(opponents) != 0:
-                    opponents["same_day"], opponents["same_week"], opponents["same_month"] = [same_day(opponents).astype(int),                                                                 same_week(opponents).astype(int), same_month(opponents).astype(int)]
+#                 if len(opponents) != 0:
+#                     opponents["same_day"], opponents["same_week"], opponents["same_month"] = [same_day(opponents).astype(int),                                                                 same_week(opponents).astype(int), same_month(opponents).astype(int)]
 
                 scores_month, scores_week, scores_day, reac_month, reac_week, reac_day = self.select(opponents)
                 opponent_info[key] = opponents
@@ -294,11 +299,13 @@ class EditorsListener:
             display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={self.actions['article_title'].unique()[0]}&action=history' target='_blank'>{date_selected}</a>"))
 
             second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
-            columns_set = {"rev_time": {"width": 150}, "rev_id": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
+            columns_set = {"rev_time": {"width": 180}, "rev_id": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
                "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
-               "stopwords_ratio": {"width": 125}, "main_opponent": {"width": 120}, "min_react": {"width": 90},
+               "stopwords_ratio": {"width": 125, "toolTip": "stopwords ratio"},
+               "main_opponent": {"width": 120, "toolTip": "main opponent"},
+               "min_react": {"width": 90, "toolTip": "min reaction time"},
                "Damaging": {"width": 90}, "Goodfaith": {"width": 90}}
-            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': False}, column_definitions=columns_set)
+            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': True}, column_definitions=columns_set)
             display(self.second_qgrid)
             
             self.out2 = Output()
@@ -306,8 +313,12 @@ class EditorsListener:
             self.second_qgrid.observe(self.on_select_revision, names=['_selected_rows'])
         
     
-    def listen(self, granularity):        
-        df_from_agg = self.get_ratios(self.df, freq=granularity)
+    def listen(self, _range1, _range2, granularity):
+        if _range1 > _range2:
+            return display(md("Please enter the correct date!"))
+        else:
+            df = self.df[(self.df.rev_time.dt.date >= _range1) & (self.df.rev_time.dt.date <= _range2)]
+        df_from_agg = self.get_ratios(df, freq=granularity)
         df_from_agg = df_from_agg.rename({"editor_str": "editor_id"}, axis=1)
         df_display = self.merge_main(df_from_agg, freq=granularity)
         df_display["conflict"] = (df_display["conflict"] / df_display["elegibles"]).fillna(0)
@@ -317,11 +328,13 @@ class EditorsListener:
                        "productivity", "conflict",
                        "stopwords_ratio", "main_opponent",
                        "avg_reac_time", "revisions", "editor_id"]].set_index("rev_time").sort_index(ascending=False)
-        columns_set = {"rev_time": {"width": 85}, "editor": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
+        columns_set = {"rev_time": {"width": 90}, "editor": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
                        "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
-                       "stopwords_ratio": {"width": 125}, "main_opponent": {"width": 120}, "avg_reac_time": {"width": 115},
+                       "stopwords_ratio": {"width": 125, "toolTip": "stopwords ratio"},
+                       "main_opponent": {"width": 120, "toolTip": "main opponent"},
+                       "avg_reac_time": {"width": 115, "toolTip": "average reaction time"},
                        "revisions": {"width": 80}, "editor_id": {"width": 80}}
-        self.qgrid_obj = qgrid.show_grid(displayed, grid_options={'forceFitColumns':False}, column_definitions=columns_set)
+        self.qgrid_obj = qgrid.show_grid(displayed, grid_options={'forceFitColumns':True}, column_definitions=columns_set)
         
         display(self.qgrid_obj)
         self.out = Output()
