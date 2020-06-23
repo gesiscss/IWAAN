@@ -76,6 +76,8 @@ class EditorsListener:
         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
         self.selected_rev = self.all_actions["revision"].iloc[-1]
         
+        self.rev_comments = dict(zip(sources["comments"]["rev_id"], sources["comments"]["comment"]))
+
         self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, None, self.lng)
         
         clear_output()
@@ -288,6 +290,7 @@ class EditorsListener:
         with self.out2:
             clear_output()
             self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
+            display(md(f"**Comments to the revision {self.selected_rev}:** {self.rev_comments[self.selected_rev]}"))
             display(HTML(f"<a href='https://{self.lng}.wikipedia.org/w/index.php?diff={self.selected_rev}&title=TITLEDOESNTMATTER&diffmode=source' target='_blank'>Cilck here to check revisions differences</a>"))
     
     def on_select_change(self, change):
@@ -301,13 +304,14 @@ class EditorsListener:
             display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={self.actions['article_title'].unique()[0]}&action=history' target='_blank'>{date_selected}</a>"))
 
             second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
-            columns_set = {"rev_time": {"width": 180}, "rev_id": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
+            columns_set = {"rev_time": {"width": 140}, "rev_id": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
                "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
                "stopwords_ratio": {"width": 125, "toolTip": "stopwords ratio"},
                "main_opponent": {"width": 120, "toolTip": "main opponent"},
                "min_react": {"width": 90, "toolTip": "min reaction time"},
                "Damaging": {"width": 90}, "Goodfaith": {"width": 90}}
-            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': True}, column_definitions=columns_set)
+            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': False,
+                                                    'syncColumnCellResize': True}, column_definitions=columns_set)
             display(self.second_qgrid)
             
             self.out2 = Output()
@@ -453,6 +457,8 @@ class RevisionsManager:
         ores_df = ores_dv.get_goodfaith_damage(revs_list)
         
         return ores_df
+    
+        
         
         
         
