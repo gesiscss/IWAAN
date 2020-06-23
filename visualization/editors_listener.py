@@ -74,8 +74,9 @@ class EditorsListener:
         print("Initializing...")
         self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
+        self.selected_rev = self.all_actions["revision"].iloc[-1]
         
-        self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, self.lng)
+        self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, None, self.lng)
         
         clear_output()
         
@@ -83,6 +84,7 @@ class EditorsListener:
     def get_infos(self):
         monthly_dict = self.get_daily_tokens(self.tokens)
         opponent_info, scores_info, reac_info = self.calculate(monthly_dict)
+        self.revision_manager.opponents_info = opponent_info
         self.test_opponent = opponent_info
         self.sort_by_granularity(scores_info, reac_info)
         
@@ -323,6 +325,8 @@ class EditorsListener:
         df_display = self.merge_main(df_from_agg, freq=granularity)
         df_display["conflict"] = (df_display["conflict"] / df_display["elegibles"]).fillna(0)
         
+        df_display["main_opponent"] = df_display["main_opponent"].replace(self.names_id)
+        
         displayed = df_display[["rev_time", "editor", 
                       "adds", "dels", "reins",
                        "productivity", "conflict",
@@ -346,12 +350,13 @@ class EditorsListener:
         
 class RevisionsManager:
     
-    def __init__(self, agg, merged_all_actions, merged_actions, lng):
+    def __init__(self, agg, merged_all_actions, merged_actions, opponents_info, lng):
         self.agg_actions = agg
         self.names_dict = agg[["editor_str", "editor"]].drop_duplicates().set_index("editor_str")["editor"].to_dict()
         
         self.actions_inc_stop = merged_all_actions
         self.actions_exc_stop = merged_actions
+        self.opponents_info = opponents_info
         
         self.lng=lng
         
@@ -413,15 +418,15 @@ class RevisionsManager:
     
     def get_most_conflict_from_rev(self, rev_df):    
         sort_rev = rev_df.sort_values("conflict", ascending=False)
-        rev = sort_rev["revision"].unique()[0]
-
-        token_most_conflict = sort_rev.iloc[0]["token_id"]
-        token_history = self.actions_exc_stop[self.actions_exc_stop["token_id"] == token_most_conflict]
-        idx_this_token = token_history[token_history["revision"] == rev].index
-        main_opponent_id = token_history.loc[idx_this_token - 1]["editor"].iloc[0]
-        main_opponent = self.names_dict[main_opponent_id]
-
         min_react = str(sort_rev.iloc[0]["time_diff"])
+        
+        # Find most opponent
+        editor = rev_df["editor"].unique()[0]
+        period = rev_df["rev_time"].astype("datetime64[ns]").dt.to_period('M').unique()[0]
+        key = (period, editor)
+        opponent_info = self.opponents_info[key]
+        main_opponent_id = opponent_info.groupby(["editor"]).agg({"conflict": "sum"}).sort_values("conflict", ascending=False).iloc[0].name
+        main_opponent = self.names_dict[main_opponent_id]
 
         return main_opponent, min_react
     
