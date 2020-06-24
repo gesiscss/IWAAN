@@ -19,3 +19,4 @@ dependencies:
     - jupyter_contrib_nbextensions
     - keyboard
     - tqdm
+    - pyLDAvis
