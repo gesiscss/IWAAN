@@ -41,7 +41,7 @@ class TokensListener():
         #get editor names by editor id
         self.token_source = self.token_source.rename(columns={"editor":'editor_id'})
         self.token_source['editor_id'] = self.token_source['editor_id'].astype(str)
-        tokens_merged = self.sources['editors'][['editor_id', 'name']].astype(str).merge(self.token_source, right_index=True, on='editor_id', how='outer')
+        tokens_merged = self.sources['editors'][['editor_id', 'name']].merge(self.token_source, right_index=True, on='editor_id', how='outer')
         self.token_source = tokens_merged[tokens_merged['token'].notnull()].copy()
         
     def convert_time_diff(time_diff):
@@ -80,7 +80,11 @@ class TokensListener():
         self.rev_id = int(rev_id)
         
         #extract editor name and timestamp to display before the table
-        editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == int(self.token_source[self.token_source['rev_id']==self.rev_id]['editor'].values[0]), 'name'].values[0]
+        some_rev = self.token_source[self.token_source['rev_id']==self.rev_id]
+        if len(some_rev) != 0:
+            editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == some_rev['editor'].values[0], 'name'].values[0]
+        else:
+            return display(md("No tokens in this revision!"))
         timestamp = pd.DatetimeIndex(self.token_source[self.token_source['rev_id']==self.rev_id]['rev_time'])[0]
         display(md(f"***Selected revision: ID: {self.rev_id}, editor name: {str(editor_name)}, timestamp: {str(timestamp.date())} {str(timestamp.time())}***"))
                    
