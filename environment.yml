@@ -14,9 +14,9 @@ dependencies:
     - matplotlib
     - plotly
     - qgrid
-    - nbstripout
     - multidict
     - jupyter_contrib_nbextensions
     - keyboard
     - tqdm
     - pyLDAvis
+    - sklearn
