@@ -11,3 +11,4 @@ multidict
 jupyter_contrib_nbextensions
 keyboard
 pyLDAvis
+sklearn
