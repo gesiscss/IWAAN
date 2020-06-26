@@ -62,7 +62,7 @@ def merged_tokens_and_elegibles(elegibles, tokens):
 
 class EditorsListener:
     
-    def __init__(self, sources, lng):
+    def __init__(self, sources, lng, search_widget):
         self.df = sources["agg_actions"]
         self.elegibles = sources["elegibles"]
         self.tokens = sources["tokens"]
@@ -79,6 +79,9 @@ class EditorsListener:
         self.rev_comments = dict(zip(sources["comments"]["rev_id"], sources["comments"]["comment"]))
 
         self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, None, self.lng)
+        
+        self.search_widget = search_widget
+        self.search_widget.value = self.selected_rev
         
         clear_output()
         
@@ -290,7 +293,8 @@ class EditorsListener:
         with self.out2:
             clear_output()
             self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
-            display(md(f"**Comments to the revision {self.selected_rev}:** {self.rev_comments[self.selected_rev]}"))
+            self.search_widget.value = self.selected_rev
+            display(md(f"**Comment for the revision {self.selected_rev}:** {self.rev_comments[self.selected_rev]}"))
             display(HTML(f"<a href='https://{self.lng}.wikipedia.org/w/index.php?diff={self.selected_rev}&title=TITLEDOESNTMATTER&diffmode=source' target='_blank'>Cilck here to check revisions differences</a>"))
     
     def on_select_change(self, change):
@@ -304,13 +308,15 @@ class EditorsListener:
             display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={self.actions['article_title'].unique()[0]}&action=history' target='_blank'>{date_selected}</a>"))
 
             second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
-            columns_set = {"rev_time": {"width": 140}, "rev_id": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
-               "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
-               "stopwords_ratio": {"width": 125, "toolTip": "stopwords ratio"},
-               "main_opponent": {"width": 120, "toolTip": "main opponent"},
-               "min_react": {"width": 90, "toolTip": "min reaction time"},
-               "Damaging": {"width": 90}, "Goodfaith": {"width": 90}}
-            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': False,
+            second_df.rename({"main_opponent": "main_op", "stopwords_ratio": "SW_ratio",
+                             "productivity": "prod"}, axis=1, inplace=True)
+            columns_set = {"rev_time": {"width": 165}, "rev_id": {"width": 85}, "adds": {"width": 50}, "dels": {"width": 50},
+               "reins": {"width": 50}, "prod": {"width": 50, "toolTip": "productivity"}, "conflict": {"width": 70},
+               "SW_ratio": {"width": 82, "toolTip": "stopwords ratio"},
+               "main_op": {"width": 80, "toolTip": "main opponent"},
+               "min_react": {"width": 132, "toolTip": "min reaction time"},
+               "Damaging": {"width": 92}, "Goodfaith": {"width": 90}}
+            self.second_qgrid = qgrid.show_grid(second_df, grid_options={'forceFitColumns': True,
                                                     'syncColumnCellResize': True}, column_definitions=columns_set)
             display(self.second_qgrid)
             
@@ -331,17 +337,20 @@ class EditorsListener:
         
         df_display["main_opponent"] = df_display["main_opponent"].replace(self.names_id)
         
+        df_display.rename({"main_opponent": "main_op", "stopwords_ratio": "SW_ratio",
+                          "revisions": "revs", "productivity": "prod"}, axis=1, inplace=True)
+        
         displayed = df_display[["rev_time", "editor", 
                       "adds", "dels", "reins",
-                       "productivity", "conflict",
-                       "stopwords_ratio", "main_opponent",
-                       "avg_reac_time", "revisions", "editor_id"]].set_index("rev_time").sort_index(ascending=False)
-        columns_set = {"rev_time": {"width": 90}, "editor": {"width": 85}, "adds": {"width": 55}, "dels": {"width": 55},
-                       "reins": {"width": 55}, "productivity": {"width": 100}, "conflict": {"width": 70},
-                       "stopwords_ratio": {"width": 125, "toolTip": "stopwords ratio"},
-                       "main_opponent": {"width": 120, "toolTip": "main opponent"},
-                       "avg_reac_time": {"width": 115, "toolTip": "average reaction time"},
-                       "revisions": {"width": 80}, "editor_id": {"width": 80}}
+                       "prod", "conflict",
+                       "SW_ratio", "main_op",
+                       "avg_reac_time", "revs", "editor_id"]].set_index("rev_time").sort_index(ascending=False)
+        columns_set = {"rev_time": {"width": 90}, "editor": {"width": 85}, "adds": {"width": 50}, "dels": {"width": 50},
+                       "reins": {"width": 50}, "prod": {"width": 50, "toolTip": "productivity"}, "conflict": {"width": 70},
+                       "SW_ratio": {"width": 80, "toolTip": "stopwords ratio"},
+                       "main_op": {"width": 90, "toolTip": "main opponent"},
+                       "avg_reac_time": {"width": 125, "toolTip": "average reaction time"},
+                       "revs": {"width": 45, "toolTip": "revisions"}, "editor_id": {"width": 80}}
         self.qgrid_obj = qgrid.show_grid(displayed, grid_options={'forceFitColumns':True}, column_definitions=columns_set)
         
         display(self.qgrid_obj)

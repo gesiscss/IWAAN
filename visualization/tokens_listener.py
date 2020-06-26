@@ -41,7 +41,7 @@ class TokensListener():
         #get editor names by editor id
         self.token_source = self.token_source.rename(columns={"editor":'editor_id'})
         self.token_source['editor_id'] = self.token_source['editor_id'].astype(str)
-        tokens_merged = self.sources['editors'][['editor_id', 'name']].astype(str).merge(self.token_source, right_index=True, on='editor_id', how='outer')
+        tokens_merged = self.sources['editors'][['editor_id', 'name']].merge(self.token_source, right_index=True, on='editor_id', how='outer')
         self.token_source = tokens_merged[tokens_merged['token'].notnull()].copy()
         
     def convert_time_diff(time_diff):
@@ -68,7 +68,7 @@ class TokensListener():
             print('Link to the wikipedia diff: ')
             print(url)
         
-    def listen(self, rev_id, stopwords):
+    def listen(self, revid, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
             self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
@@ -77,10 +77,15 @@ class TokensListener():
             self.token_source = self.sources["cm_inc_stop"].all_actions.copy()
 
         #selected revision id:
-        self.rev_id = int(rev_id)
+        #self.rev_id = int(rev_id)
         
         #extract editor name and timestamp to display before the table
-        editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == int(self.token_source[self.token_source['rev_id']==self.rev_id]['editor'].values[0]), 'name'].values[0]
+        self.rev_id = revid
+        self.filtered_df = self.token_source[self.token_source['rev_id']==self.rev_id]
+        if len(self.filtered_df) != 0:
+            editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == self.filtered_df['editor'].values[0], 'name'].values[0]
+        else:
+            return display(md("No tokens in this revision!"))
         timestamp = pd.DatetimeIndex(self.token_source[self.token_source['rev_id']==self.rev_id]['rev_time'])[0]
         display(md(f"***Selected revision: ID: {self.rev_id}, editor name: {str(editor_name)}, timestamp: {str(timestamp.date())} {str(timestamp.time())}***"))
                    
@@ -111,25 +116,9 @@ class TokensListener():
             self.tokens_for_grid = tokens_for_grid.copy()
                    
             #qgrid widget:
-            qgrid_selected_revision = qgrid.show_grid(self.tokens_for_grid)
+            columns_set = {"rev_time": {"width": 180}, "action": {"width": 65}, "string": {"width": 100}, "token_id": {"width": 94}}
+            qgrid_selected_revision = qgrid.show_grid(self.tokens_for_grid, column_definitions=columns_set)
             self.qgrid_selected_revision = qgrid_selected_revision
-            
-            #preset filter to display only the selected revision
-            self.qgrid_selected_revision._handle_qgrid_msg_helper({
-                    'type': 'show_filter_dropdown',
-                    'field': 'rev_id',
-                    'search_val': str(self.rev_id)
-                })
-            self.qgrid_selected_revision._handle_qgrid_msg_helper({
-                    'field': "rev_id",
-                    'filter_info': {
-                        'field': "rev_id",
-                        'selected': [0],
-                        'type': "text",
-                        'excluded': []
-                    },
-                    'type': "change_filter"
-                })
             
             display(self.qgrid_selected_revision)
             self.out213 = Output()
