@@ -68,7 +68,7 @@ class TokensListener():
             print('Link to the wikipedia diff: ')
             print(url)
         
-    def listen(self, stopwords):
+    def listen(self, revid, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
             self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
@@ -80,6 +80,7 @@ class TokensListener():
         #self.rev_id = int(rev_id)
         
         #extract editor name and timestamp to display before the table
+        self.rev_id = revid
         self.filtered_df = self.token_source[self.token_source['rev_id']==self.rev_id]
         if len(self.filtered_df) != 0:
             editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == self.filtered_df['editor'].values[0], 'name'].values[0]
@@ -115,7 +116,7 @@ class TokensListener():
             self.tokens_for_grid = tokens_for_grid.copy()
                    
             #qgrid widget:
-            columns_set = {"rev_time": {"width": 180}, "action": {"width": 65}, "string": {"width": 80}}
+            columns_set = {"rev_time": {"width": 180}, "action": {"width": 65}, "string": {"width": 100}, "token_id": {"width": 94}}
             qgrid_selected_revision = qgrid.show_grid(self.tokens_for_grid, column_definitions=columns_set)
             self.qgrid_selected_revision = qgrid_selected_revision
             
