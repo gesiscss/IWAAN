@@ -74,6 +74,12 @@ class EditorsListener:
         print("Initializing...")
         self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
+        
+        self.actions["last_day_month"] = self.actions["rev_time"].dt.date.apply(get_last_date_month)
+        self.actions["last_day_week"] = self.actions["rev_time"].dt.date.apply(week_get_sunday)
+        self.actions["this_day"] = self.actions["rev_time"].dt.date.apply(get_same_day)
+        
+        
         self.selected_rev = self.all_actions["revision"].iloc[-1]
         
         self.rev_comments = dict(zip(sources["comments"]["rev_id"], sources["comments"]["comment"]))
@@ -88,10 +94,11 @@ class EditorsListener:
         
     def get_infos(self):
         monthly_dict = self.get_daily_tokens(self.tokens)
-        opponent_info, scores_info, reac_info = self.calculate(monthly_dict)
-        self.revision_manager.opponents_info = opponent_info
+        self.month_dict = monthly_dict
+        opponent_info, opponent_dict = self.calculate(monthly_dict)
+        self.revision_manager.opponents_info = opponent_dict
         self.test_opponent = opponent_info
-        self.sort_by_granularity(scores_info, reac_info)
+        self.sort_by_granularity(opponent_info)
         
         clear_output()
            
@@ -138,7 +145,8 @@ class EditorsListener:
         # Merge the infos we need
         opponent_part = opponent_df[["editor", "rev_time"]].rename({"rev_time": "oppo_time"}, axis=1).reset_index(drop=True)
         idx_part = conflicts_filter[["token_id", "conflict", "rev_time",
-                            "revision", "time_diff", "editor"]].rename({"rev_time": "edit_time",
+                            "revision", "time_diff", "editor",
+                            "last_day_month", "last_day_week", "this_day"]].rename({"rev_time": "edit_time",
                                                         "editor": "idx_editor"}, axis=1).reset_index(drop=True)
         final = pd.concat([opponent_part,
                      idx_part], axis=1).sort_values(["token_id", "conflict"], ascending=[True, False]).set_index("token_id")
@@ -146,86 +154,9 @@ class EditorsListener:
         return final
     
     
-    def rank_conflict_under_tf(self, tf_oppo_df, freq):
-        "freq=M, W, D"
-        conflict_scores_tf = tf_oppo_df.copy()
-
-        if freq == "M":        
-            conflict_scores_tf["bench_date"] = conflict_scores_tf["edit_time"].dt.date.apply(get_last_date_month)
-        if freq == "W":
-            conflict_scores_tf["bench_date"] = conflict_scores_tf["edit_time"].dt.date.apply(week_get_sunday)
-        if freq == "D":
-            conflict_scores_tf["bench_date"] = conflict_scores_tf["edit_time"].dt.date.apply(get_same_day)
-
-        conflict_scores_tf = conflict_scores_tf.groupby(["idx_editor", "editor", "bench_date"]).agg({"conflict": "sum"}).reset_index()
-        conflict_scores_tf = conflict_scores_tf.sort_values("conflict", ascending=False).drop_duplicates("bench_date").reset_index(drop=True)
-
-        return conflict_scores_tf
-
-
-    def get_avg_rec_time(self, tf_oppo_df, freq):
-        avg_rec_df = tf_oppo_df.copy()
-
-        if freq == "M":        
-            avg_rec_df["bench_date"] = avg_rec_df["edit_time"].dt.date.apply(get_last_date_month)
-        if freq == "W":
-            avg_rec_df["bench_date"] = avg_rec_df["edit_time"].dt.date.apply(week_get_sunday)
-        if freq == "D":
-            avg_rec_df["bench_date"] = avg_rec_df["edit_time"].dt.date.apply(get_same_day)
-
-        avg_rec_df = avg_rec_df.groupby(["idx_editor",
-                            "bench_date"])["time_diff"].agg(lambda x: str(x.mean()).split('.')[0]).reset_index()
-        avg_rec_df = avg_rec_df.rename({"time_diff": "avg_reac_time"}, axis=1)
-
-        if len(avg_rec_df) == 0:
-            avg_rec_df = pd.DataFrame(columns=["idx_editor", "bench_date", "avg_rec_time"])
-
-        return avg_rec_df
-    
-    
-    def select(self, oppo_df):
-        empty_df = pd.DataFrame(columns=["idx_editor", "editor", "bench_date", "conflict"])
-        empty_rec_df = pd.DataFrame(columns=["idx_editor", "bench_date", "avg_rec_time"])
-        empty_revs_df = pd.DataFrame(columns=["idx_editor", "bench_date", "revision"])
-        display_cols = ["idx_editor", "editor", "oppo_time", "conflict", "edit_time", "time_diff", "revision"]
-
-        if len(oppo_df) != 0:       
-#             tf_oppo_month = oppo_df.loc[oppo_df["same_month"] == 1][display_cols]
-#             tf_oppo_week = oppo_df.loc[oppo_df["same_week"] == 1][display_cols]
-#             tf_oppo_day = oppo_df.loc[oppo_df["same_day"] == 1][display_cols]
-            
-            tf_oppo_month = oppo_df[display_cols]
-            tf_oppo_week = oppo_df[display_cols]
-            tf_oppo_day = oppo_df[display_cols]
-
-            # Month
-            conflict_scores_month = self.rank_conflict_under_tf(tf_oppo_month, freq="M")
-            avg_time_month = self.get_avg_rec_time(tf_oppo_month, freq="M")
-
-            # Weekly
-            conflict_scores_week = self.rank_conflict_under_tf(tf_oppo_week, freq="W")
-            avg_time_week = self.get_avg_rec_time(tf_oppo_week, freq="W")
-
-            # Daily
-            conflict_scores_day = self.rank_conflict_under_tf(tf_oppo_day, freq="D")
-            avg_time_day = self.get_avg_rec_time(tf_oppo_day, freq="D")
-
-        else:
-            conflict_scores_month = empty_df
-            conflict_scores_week = empty_df
-            conflict_scores_day = empty_df
-
-            avg_time_month = empty_rec_df
-            avg_time_week = empty_rec_df
-            avg_time_day = empty_rec_df
-
-        return conflict_scores_month, conflict_scores_week, conflict_scores_day, avg_time_month, avg_time_week, avg_time_day
-    
     
     def calculate(self, monthly_tokens):
-        opponent_info = {}
-        scores_info = {}
-        avg_reac_info = {}
+        opponent_dict = {}
         for key, value in tqdm(monthly_tokens.items()):
             if len(value) != 0:
                 opponents = self.get_opponents(value, self.actions)
@@ -233,46 +164,42 @@ class EditorsListener:
 #                 if len(opponents) != 0:
 #                     opponents["same_day"], opponents["same_week"], opponents["same_month"] = [same_day(opponents).astype(int),                                                                 same_week(opponents).astype(int), same_month(opponents).astype(int)]
 
-                scores_month, scores_week, scores_day, reac_month, reac_week, reac_day = self.select(opponents)
-                opponent_info[key] = opponents
-                scores_info[key] = [scores_month, scores_week, scores_day]
-                avg_reac_info[key] = [reac_month, reac_week, reac_day]
+                opponent_dict[key] = opponents
             else:
                 pass
-                
-        return opponent_info, scores_info, avg_reac_info
+        
+        opponent_info = pd.concat(list(opponent_dict.values()))
+                        
+        return opponent_info, opponent_dict
     
-    def sort_by_granularity(self, scores_dict, reac_dict):
-        empty_opponent = pd.DataFrame(columns=["idx_editor", "editor", "bench_date", "conflict"])
-        month_opponent = []
-        week_opponent = []
-        daily_opponent = []
-
-        for value in scores_dict.values():
-            month_opponent.append(value[0])
-            week_opponent.append(value[1])
-            daily_opponent.append(value[2])
-
-        month_opponent = pd.concat(month_opponent, sort=False).reset_index(drop=True).rename({"idx_editor": "editor_id",                                                                                  "editor": "main_opponent",                                                                                  "bench_date": "rev_time",}, axis=1).drop("conflict", axis=1)
-        week_opponent = pd.concat(week_opponent, sort=False).reset_index(drop=True).rename({"idx_editor": "editor_id",                                                                                  "editor": "main_opponent",                                                                                  "bench_date": "rev_time",}, axis=1).drop("conflict", axis=1)
-        daily_opponent = pd.concat(daily_opponent, sort=False).reset_index(drop=True).rename({"idx_editor": "editor_id",                                                                                  "editor": "main_opponent",                                                                                  "bench_date": "rev_time",}, axis=1).drop("conflict", axis=1)
-
-        empty_avg_rec = pd.DataFrame(columns=["idx_editor", "bench_date", "avg_rec_time"])
-        month_avg_rec = []
-        week_avg_rec = []
-        daily_avg_rec = []
-
-        for value in reac_dict.values():
-            month_avg_rec.append(value[0])
-            week_avg_rec.append(value[1])
-            daily_avg_rec.append(value[2])
-
-        month_avg_rec = pd.concat(month_avg_rec,
-                          sort=False).reset_index(drop=True).rename({"idx_editor": "editor_id", "bench_date": "rev_time",}, axis=1)
-        week_avg_rec = pd.concat(week_avg_rec,
-                         sort=False).reset_index(drop=True).rename({"idx_editor": "editor_id", "bench_date": "rev_time",}, axis=1)
-        daily_avg_rec = pd.concat(daily_avg_rec,
-                          sort=False).reset_index(drop=True).rename({"idx_editor": "editor_id", "bench_date": "rev_time",}, axis=1)
+    
+    def sort_scores(self, oppo_info, col):
+        group_df = oppo_info.groupby(["idx_editor",
+                             "editor",
+                             col]).agg({"conflict": "sum"}).reset_index().rename({col: "bench_date"}, axis=1)
+        sort_df = group_df.sort_values(["idx_editor", "conflict"], ascending=[True, False])
+        sort_df = sort_df.drop_duplicates(["idx_editor", "bench_date"]).sort_values("bench_date").reset_index(drop=True)
+        sort_df = sort_df.rename({"idx_editor": "editor_id", "editor": "main_opponent", "bench_date": "rev_time"}, axis=1)
+        df_display = sort_df[["editor_id", "main_opponent", "rev_time"]]
+        
+        return df_display
+    
+    def avg_reac(self, oppo_info, col):
+        avg_reac_display = oppo_info.groupby(["idx_editor", 
+                    col])["time_diff"].agg(lambda x: str(x.mean()).split('.')[0]).reset_index().rename({col: "rev_time",                                           "time_diff":"avg_reac_time", "idx_editor":"editor_id"},axis=1).sort_values("rev_time").reset_index(drop=True)
+        
+        return avg_reac_display
+           
+    
+    def sort_by_granularity(self, oppo_info):
+        
+        month_opponent = self.sort_scores(oppo_info, "last_day_month")
+        week_opponent = self.sort_scores(oppo_info, "last_day_week")
+        daily_opponent = self.sort_scores(oppo_info, "this_day")
+        
+        month_avg_rec = self.avg_reac(oppo_info, "last_day_month")
+        week_avg_rec = self.avg_reac(oppo_info, "last_day_week")
+        daily_avg_rec = self.avg_reac(oppo_info, "this_day")
 
         self.gran_dict = {"Monthly": [month_opponent, month_avg_rec],
                  "Weekly": [week_opponent, week_avg_rec],
@@ -332,6 +259,7 @@ class EditorsListener:
             df = self.df[(self.df.rev_time.dt.date >= _range1) & (self.df.rev_time.dt.date <= _range2)]
         df_from_agg = self.get_ratios(df, freq=granularity)
         df_from_agg = df_from_agg.rename({"editor_str": "editor_id"}, axis=1)
+        self.test_df_agg = df_from_agg
         df_display = self.merge_main(df_from_agg, freq=granularity)
         df_display["conflict"] = (df_display["conflict"] / df_display["elegibles"]).fillna(0)
         
