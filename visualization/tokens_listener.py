@@ -35,7 +35,9 @@ class TokensListener():
 
     def convert_oadd(self):
         #convert 'action' of first insertion to 'oadd'
-        self.token_source['action'] = self.token_source.apply(lambda x: 'oadd' if x['o_rev_id'] == x['rev_id'] else x['action'], axis=1)
+        #self.token_source['action'] = self.token_source.apply(lambda x: 'oadd' if x['o_rev_id'] == x['rev_id'] else x['action'], axis=1)
+        mask_add = self.token_source["o_rev_id"] == self.token_source["rev_id"]
+        self.token_source.loc[mask_add, "action"] = "oadd"
         
     def get_editor_names(self):
         #get editor names by editor id
@@ -98,7 +100,7 @@ class TokensListener():
             self.convert_oadd()
             self.get_editor_names()
             self.get_columns()
-            self.token_source['time_diff'] = self.token_source['time_diff'].apply(lambda x: TokensListener.convert_time_diff(x))
+            #self.token_source['time_diff'] = self.token_source['time_diff'].apply(lambda x: TokensListener.convert_time_diff(x))
             
             #sort the dataframe by timestamp and token_id:
             self.token_source.sort_values(['rev_time', 'token_id'], ascending = True, inplace=True)
@@ -109,6 +111,7 @@ class TokensListener():
             
             #convert the format of columns to display:
             tokens_for_grid['rev_id'] = tokens_for_grid['rev_id'].astype(int).astype(str)
+            tokens_for_grid['time_diff'] = tokens_for_grid['time_diff'].apply(lambda x: TokensListener.convert_time_diff(x))
             tokens_for_grid['time_diff'] = tokens_for_grid['time_diff'].astype(str)
             tokens_for_grid['token_id'] = tokens_for_grid['token_id'].astype(int).astype(str)
                    
