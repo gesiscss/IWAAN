@@ -1,5 +1,4 @@
 import calendar
-from tqdm import tqdm
 from datetime import date, timedelta
 import pandas as pd
 
@@ -11,24 +10,6 @@ from ipywidgets import Output
 from external.ores import ORESAPI, ORESDV
 
 # Some auxiliary functions for date filtering
-
-def same_month(oppo_df):
-    mask_same_year = oppo_df["oppo_time"].dt.year == oppo_df["edit_time"].dt.year
-    mask_same_month = oppo_df["oppo_time"].dt.month == oppo_df["edit_time"].dt.month
-    return mask_same_year & mask_same_month
-
-def same_week(oppo_df):
-    df = oppo_df.copy()
-    df["edit_time"] = df["edit_time"].dt.date
-    df["oppo_time"] = df["oppo_time"].dt.date
-    
-    diff = (df["edit_time"] - df["oppo_time"]).apply(lambda x: x.days)
-    days_to_mon = df["edit_time"].unique()[0].weekday()
-    
-    return ~(diff > days_to_mon)
-
-def same_day(oppo_df):
-    return oppo_df["oppo_time"].dt.date == oppo_df["edit_time"].dt.date
 
 def week_get_sunday(some_ts):
     return some_ts + timedelta(days=6 - some_ts.weekday())
@@ -43,12 +24,6 @@ def get_last_date_month(some_ts):
 def get_same_day(some_ts):
     return date(some_ts.year, some_ts.month, some_ts.day)
 
-def within_month(series, some_date):
-    mask_in_year = series.dt.year == some_date.year
-    mask_in_month = series.dt.month == some_date.month
-    
-    return mask_in_year & mask_in_month
-
 def merged_tokens_and_elegibles(elegibles, tokens):
     elegible_token = elegibles.set_index("rev_id")
     comp_tokens = tokens.copy()
@@ -58,7 +33,6 @@ def merged_tokens_and_elegibles(elegibles, tokens):
     
     return tokens_with_conflict
     
-
 
 class EditorsListener:
     
@@ -94,10 +68,9 @@ class EditorsListener:
         
     def get_infos(self):
         monthly_dict = self.get_daily_tokens(self.tokens)
-        self.month_dict = monthly_dict
-        opponent_info, opponent_dict = self.calculate(monthly_dict)
-        self.revision_manager.opponents_info = opponent_dict
-        self.test_opponent = opponent_info
+        print("Calculating...")
+        opponent_info = self.calculate(monthly_dict)
+        self.revision_manager.opponents_info = opponent_info
         self.sort_by_granularity(opponent_info)
         
         clear_output()
@@ -157,20 +130,10 @@ class EditorsListener:
     
     def calculate(self, monthly_tokens):
         opponent_dict = {}
-        for key, value in tqdm(monthly_tokens.items()):
-            if len(value) != 0:
-                opponents = self.get_opponents(value, self.actions)
-
-#                 if len(opponents) != 0:
-#                     opponents["same_day"], opponents["same_week"], opponents["same_month"] = [same_day(opponents).astype(int),                                                                 same_week(opponents).astype(int), same_month(opponents).astype(int)]
-
-                opponent_dict[key] = opponents
-            else:
-                pass
-        
-        opponent_info = pd.concat(list(opponent_dict.values()))
+        all_revs = sum(monthly_tokens.values(), [])
+        opponent_info = self.get_opponents(all_revs, self.actions)
                         
-        return opponent_info, opponent_dict
+        return opponent_info
     
     
     def sort_scores(self, oppo_info, col):
@@ -364,8 +327,9 @@ class RevisionsManager:
         # Find most opponent
         editor = rev_df["editor"].unique()[0]
         period = rev_df["rev_time"].astype("datetime64[ns]").dt.to_period('M').unique()[0]
-        key = (period, editor)
-        opponent_info = self.opponents_info[key]
+        mask_date = self.opponents_info["edit_time"].astype("datetime64[ns]").dt.to_period('M') == period
+        mask_editor = self.opponents_info["idx_editor"] == editor
+        opponent_info = self.opponents_info[mask_date & mask_editor]
         main_opponent_id = opponent_info.groupby(["editor"]).agg({"conflict": "sum"}).sort_values("conflict", ascending=False).iloc[0].name
         main_opponent = self.names_dict[main_opponent_id]
 
