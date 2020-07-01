@@ -11,7 +11,7 @@ from metrics.conflict import ConflictManager
 from metrics.token import TokensManager
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 
 class ConflictsListener():
@@ -348,7 +348,7 @@ class ConflictsEditorListener():
     def __date_editor_filter(self, df, year_month, editor_id=None):
         year, month, day = year_month
         selected_time_start = date(year, month, day)
-        selected_time_end = date(year, month, day + 1)
+        selected_time_end = selected_time_start + timedelta(days=1)
         #selected_time_end = date(year, month, calendar.monthrange(year,month)[1])
 
         mask_date = (selected_time_start <= df["rev_time"].dt.date) & (selected_time_end > df["rev_time"].dt.date)
