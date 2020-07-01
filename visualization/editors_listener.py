@@ -184,6 +184,8 @@ class EditorsListener:
             clear_output()
             self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
             self.search_widget.value = self.selected_rev
+            if self.selected_rev not in self.rev_comments.keys():
+                self.rev_comments[self.selected_rev] = ''            
             display(md(f"**Comment for the revision {self.selected_rev}:** {self.rev_comments[self.selected_rev]}"))
             display(HTML(f"<a href='https://{self.lng}.wikipedia.org/w/index.php?diff={self.selected_rev}&title=TITLEDOESNTMATTER&diffmode=source' target='_blank'>Cilck here to check revisions differences</a>"))
     
@@ -216,6 +218,8 @@ class EditorsListener:
         
     
     def listen(self, _range1, _range2, granularity):
+        if (len(str(_range1.year)) < 4) | (len(str(_range2.year)) < 4):
+            return display(md("Please enter the correct date!"))
         if _range1 > _range2:
             return display(md("Please enter the correct date!"))
         else:

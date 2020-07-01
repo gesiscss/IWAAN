@@ -37,6 +37,7 @@ class ORESAPI(API):
                          api_key=api_key,
                          attempts=attempts)
         
+        self.lng = lng
         self.base = f"{self.base}/v3/scores/{lng + project}"
         
     def get_goodfaith_damage(self, rev_list):
@@ -51,8 +52,9 @@ class ORESDV(DataView):
         res = self.api.get_goodfaith_damage(rev_list)
         
         ores_df = pd.DataFrame(columns=["rev_id", "Damaging", "Goodfaith"])
-        for idx, rev in enumerate(rev_list):   
-            one_rev_dict = res["enwiki"]["scores"][rev]
+        for idx, rev in enumerate(rev_list):
+            proj = f"{self.api.lng}wiki"
+            one_rev_dict = res[proj]["scores"][rev]
             df_dict = {}
             for k, v in one_rev_dict.items():
                 df_dict[k] = v["score"]["probability"]["true"]

@@ -48,12 +48,14 @@ class TopicsListener():
         #self.talk_content = self.talk_content[self.talk_content['topics'].isin(topics.index[topics>1])]
        
         tp = self.talk_content[self.talk_content['topics'].isin(topics.index[topics==1])]
+        self.test_tp = tp
         for i, row in tp.iterrows():
             if i!= len(self.talk_content)-1:
                 next_comment = self.talk_content.loc[i+1, 'comment']
                 regex = re.compile('\w*revert|removed|Remove|rvv|zurückgesetzt\w*')
-                if regex.search(next_comment):
-                    self.talk_content.drop(i)
+                if type(next_comment) == str:
+                    if regex.search(next_comment):
+                        self.talk_content.drop(i)
         self.df = self.talk_content
 
         #keeping only necessary columns for display

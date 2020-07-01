@@ -239,7 +239,7 @@ class WCActionsListener():
         tokens_action = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins)
         tokens_action.index = tokens_action.index.rename("string")
         if len(tokens_action) != 0:
-            qgrid_token_obj = qgrid.show_grid(tokens_action,grid_options={'forceFitColumns':False})
+            qgrid_token_obj = qgrid.show_grid(tokens_action,grid_options={'forceFitColumns':True})
             self.qgrid_token_obj = qgrid_token_obj
             display(md('**Select one token you are interested in:**'))
             display(self.qgrid_token_obj)

@@ -114,12 +114,14 @@ class TokensListener():
             tokens_for_grid['time_diff'] = tokens_for_grid['time_diff'].apply(lambda x: TokensListener.convert_time_diff(x))
             tokens_for_grid['time_diff'] = tokens_for_grid['time_diff'].astype(str)
             tokens_for_grid['token_id'] = tokens_for_grid['token_id'].astype(int).astype(str)
-                   
+            
+            tokens_for_grid.sort_values(["token_id", "rev_time"], inplace=True)
             tokens_for_grid.set_index('token_id', inplace=True)
             self.tokens_for_grid = tokens_for_grid.copy()
                    
             #qgrid widget:
             columns_set = {"rev_time": {"width": 180}, "action": {"width": 65}, "string": {"width": 100}, "token_id": {"width": 94}}
+            
             qgrid_selected_revision = qgrid.show_grid(self.tokens_for_grid, column_definitions=columns_set)
             self.qgrid_selected_revision = qgrid_selected_revision
             
