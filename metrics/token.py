@@ -14,15 +14,16 @@ class TokensManager:
         
     def get_states(self):
         sample = self.all_actions.copy().reset_index(drop=True)
-        
+
         # Get differences of columns 'token_id' and 'rev_time'
         diff_actions = sample[['token_id', 'rev_time']] - sample.shift(1)[['token_id', 'rev_time']]
         diff_actions = diff_actions.rename({'token_id': 'tokenid_diff', 'rev_time': 'time_diff'}, axis=1)
-
+        
         sample[['tokenid_diff', 'time_diff']] = diff_actions
 
-        sample.fillna(1.0, inplace=True)
-        
+        sample.loc[0, "tokenid_diff"] = 1.0
+        #sample.fillna(1.0, inplace=True)
+
         # Boolean for adds action
         bool_adds = sample['tokenid_diff'] != 0
         sample['bool_adds'] = bool_adds
@@ -47,7 +48,7 @@ class TokensManager:
         sample.loc[last_index, 'bool_last']=1
 
         sample['bool_survival'] = 0
-
+        self.test_sample2 = sample.copy()
         survival_df = pd.DataFrame(
             ~(sample[sample['bool_last'] == 0]['time_diff'] < timedelta(2,0,0))).rename({'time_diff':'survival'},axis=1).astype(int)
 
