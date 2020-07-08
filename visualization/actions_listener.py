@@ -13,11 +13,42 @@ class ActionsListener():
         self.tokens_all = sources["tokens_all"]
         self.tokens = sources["tokens"]
         self.tokens_elegible = sources["elegibles"]
+        self.wikidv = sources["wiki_dv"]
         self.page_id = sources["tokens_all"]["page_id"].unique()[0]
         self.editor_column = editor_column
         self.df_plotted = None
         
-    
+    def get_main(self):
+        rough_agg, self.tokens_group_all, self.tokens_group = self.get_aggregation()
+        
+        agg_columns = ['total', 'total_surv_48h', 'total_stopword_count']
+        agg_actions = rough_agg.join(pd.DataFrame(
+            rough_agg.loc[:,'adds':'adds_stopword_count'].values +\
+            rough_agg.loc[:,'dels':'dels_stopword_count'].values +\
+            rough_agg.loc[:,'reins':'reins_stopword_count'].values, 
+            index=rough_agg.index, 
+            columns=agg_columns))
+        
+        # Editor names as string.
+        agg_actions.insert(2, "editor_str", agg_actions["editor"].copy())
+        agg_actions["editor"] = agg_actions["editor"].apply(lambda x: self.__str2int(x))
+        agg_actions = agg_actions.rename({"editor": "editor_id"}, axis=1)
+        
+        # Grab user names from wikipedia.
+        print("Downloading editor usernames...")
+        self.editors = self.wikidv.get_editors(agg_actions['editor_id'].unique()).rename(columns = {'userid': 'editor_id'})
+        
+        # Merge the names of the editors to the aggregated actions dataframe.
+        agg_actions = agg_actions.merge(self.editors[['editor_id', 'name']], on='editor_id')
+        agg_actions.insert(3, 'editor', agg_actions['name'])
+        agg_actions = agg_actions.drop(columns=['name'])
+        agg_actions['editor'] = agg_actions['editor'].fillna("Unregistered")
+        
+        # Convert to datetime
+        agg_actions['rev_time'] = pd.to_datetime(agg_actions['rev_time'])
+        
+        self.df = agg_actions
+           
     def get_aggregation(self):
         actions_agg, tokens_inc_stop, tokens_exc_stop = self.get_actions_aggregation()
         elegible_actions, conflict_actions = self.elegibles_conflicts()
@@ -129,11 +160,14 @@ class ActionsListener():
         editor_revisions["rev_time"] = editor_revisions["rev_time"].values.astype("datetime64[s]")
         
         return editor_revisions
+    
+    def __str2int(self, string):
+        try:
+            integer = int(string)
+        except:
+            integer = 0
 
-    
-    def prelisten(self, df_for_listen):
-        self.df = df_for_listen
-    
+        return integer
     
     def listen(self, _range1, _range2, editor, granularity,
                black, red, blue, green, black_conflict, red_conflict):

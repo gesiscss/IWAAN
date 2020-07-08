@@ -36,13 +36,13 @@ def merged_tokens_and_elegibles(elegibles, tokens):
 
 class EditorsListener:
     
-    def __init__(self, sources, lng, search_widget):
-        self.df = sources["agg_actions"]
+    def __init__(self, agg, sources, lng, search_widget=None):
+        self.df = agg
         self.elegibles = sources["elegibles"]
         self.tokens = sources["tokens"]
-        self.all_elegibles = sources["all_elegibles"]
-        self.all_tokens = sources["all_tokens"]
-        self.names_id = dict(zip(sources["agg_actions"]["editor_str"], sources["agg_actions"]["editor"]))
+        self.all_elegibles = sources["elegibles_all"]
+        self.all_tokens = sources["tokens_all"]
+        self.names_id = dict(zip(agg["editor_str"], agg["editor"]))
         self.lng=lng
         
         print("Initializing...")
@@ -56,12 +56,13 @@ class EditorsListener:
         
         self.selected_rev = self.all_actions["revision"].iloc[-1]
         
-        self.rev_comments = dict(zip(sources["comments"]["rev_id"], sources["comments"]["comment"]))
+        self.wikidv = sources["wiki_dv"]
 
         self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, None, self.lng)
         
         self.search_widget = search_widget
-        self.search_widget.value = self.selected_rev
+        if self.search_widget != None:            
+            self.search_widget.value = self.selected_rev
         
         clear_output()
         
@@ -178,12 +179,20 @@ class EditorsListener:
         
         return final_df
     
+    def get_comments(self):
+        page_id = self.df["page_id"].unique()[0]
+        comment_content = self.wikidv.get_talk_content(page_id)[["revid", "comment"]].rename({"revid": "rev_id"}, axis=1)
+        comment_content["rev_id"] = comment_content["rev_id"].astype(str)
+        
+        self.rev_comments = dict(zip(comment_content["rev_id"], comment_content["comment"]))
+    
     
     def on_select_revision(self, change):
         with self.out2:
             clear_output()
             self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
             self.search_widget.value = self.selected_rev
+            self.get_comments()
             if self.selected_rev not in self.rev_comments.keys():
                 self.rev_comments[self.selected_rev] = ''            
             display(md(f"**Comment for the revision {self.selected_rev}:** {self.rev_comments[self.selected_rev]}"))
@@ -253,7 +262,8 @@ class EditorsListener:
         display(self.out)
         
         self.current_freq = granularity
-        self.qgrid_obj.observe(self.on_select_change, names=['_selected_rows'])
+        if self.search_widget != None:
+            self.qgrid_obj.observe(self.on_select_change, names=['_selected_rows'])
         
         
 class RevisionsManager:

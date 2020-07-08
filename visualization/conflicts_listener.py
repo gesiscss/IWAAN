@@ -231,13 +231,16 @@ class ConflictsActionListener():
         
     
     def listen(self, stopwords, _range1, _range2):
-        if stopwords == 'Not included':
-            conflict_calculator = self.sources["con_manager"]
+        if stopwords == 'Not included':            
+#             conflict_calculator = self.sources["con_manager"]
+            self.conflicts = self.sources["tokens_source"]["conflicts"].copy()
+            
         else:
-            conflict_calculator = self.sources["con_manager_all"]
+            self.conflicts = self.sources["tokens_source"]["conflicts_all"].copy()
+#             conflict_calculator = self.sources["con_manager_all"]
 
         # display the tokens, the difference in seconds and its corresponding conflict score
-        self.conflicts = conflict_calculator.conflicts.copy()
+#         self.conflicts = conflict_calculator.conflicts.copy()
         self.add_columns()
 
         if len(self.conflicts) > 0:
