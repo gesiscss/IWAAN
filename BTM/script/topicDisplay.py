@@ -5,6 +5,7 @@
 #    mat/pw_z.k20
 
 import sys
+from collections import Counter
 
 # return:    {wid:w, ...}
 def read_voca(pt):
@@ -16,35 +17,14 @@ def read_voca(pt):
 
 def read_pz(pt):
     return [float(p) for p in open(pt).readline().split()]
-    
-# voca = {wid:w,...}
-def dispTopics(pt, voca, pz):
-    k = 0
-    topics = []
-    for l in open(pt):
-        vs = [float(v) for v in l.split()]
-        wvs = zip(range(len(vs)), vs)
-        wvs = sorted(wvs, key=lambda d:d[1], reverse=True)
-        #tmps = ' '.join(['%s' % voca[w] for w,v in wvs[:10]])
-        tmps = ' '.join(['%s:%f' % (voca[w],v) for w,v in wvs[:10]])
-        topics.append((pz[k], tmps))
-        k += 1
-        
-    print('p(z)\t\tTop words')
-    for pz, s in sorted(topics, reverse=True):
-        print('%f\t%s' % (pz, s))
 
-if __name__ == '__main__':
-    if len(sys.argv) < 4:
-        print('Usage: python %s <model_dir> <K> <voca_pt>' % sys.argv[0])
-        print('\tmodel_dir    the output dir of BTM')
-        print('\tK    the number of topics')
-        print('\tvoca_pt    the vocabulary file')
-        exit(1)
-        
-    model_dir = sys.argv[1]
-    K = int(sys.argv[2])
-    voca_pt = sys.argv[3]
+def get_revision(row, token_id):
+    if token_id in row['token_id']:
+        return str(row['rev_id'])
+    
+
+def display_topics(model_dir, K, voca_pt, tokens_processed, lng, the_page):
+
     voca = read_voca(voca_pt)    
     W = len(voca)
     print('K:%d, n(W):%d' % (K, W))
@@ -53,4 +33,28 @@ if __name__ == '__main__':
     pz = read_pz(pz_pt)
     
     zw_pt = model_dir + 'k%d.pw_z' %  K
-    dispTopics(zw_pt, voca, pz)
+    k = 0
+    topics = {}
+    for l in open(zw_pt):
+        vs = [float(v) for v in l.split()]
+        wvs = zip(range(len(vs)), vs)
+        wvs = sorted(wvs, key=lambda d:d[1], reverse=True)
+        #tmps = ' '.join(['%s' % voca[w] for w,v in wvs[:10]])
+        tmps = ' '.join(['%s:%f' % (voca[w],v) for w,v in wvs[:10]])
+        rev = []
+        for w,v in wvs[:10]:
+            token_revs = tokens_processed.apply(lambda x: get_revision(x, w), axis=1).dropna().values
+            rev.extend(token_revs)
+        top_rev = [r for r, r_count in Counter(rev).most_common(3)]
+        topics[pz[k]] = (tmps, top_rev)
+        k += 1
+        
+    count = 1
+    for pz in sorted(topics.keys(), reverse=True):
+        print(f'Topic {count}:')
+        print('p(z): %f\nTop words:\n%s\nRevisions:' % (pz, topics[pz][0]))
+        for rev in topics[pz][1]:
+            url = f"https://{lng}.wikipedia.org/w/index.php?&title={the_page['title'].replace(' ', '_')}&diff={rev}"
+            print(url)
+        print('\n')
+        count += 1
