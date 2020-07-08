@@ -14,10 +14,12 @@ from metrics.conflict import ConflictManager
 
 class TokensListener():
 
-    def __init__(self, sources, lng, the_page):
+    def __init__(self, agg, sources, lng):
+        self.editors = agg[["editor_str", "editor"]].drop_duplicates().rename({"editor_str": "editor_id",
+                                                       "editor": "name"}, axis=1).reset_index(drop=True)
         self.sources = sources
         self.lng = lng
-        self.the_page = the_page
+        self.page_title = sources["tokens"]["article_title"].unique()[0]
         
     def get_columns(self):
         #create columns 'time_diff' (Time in sec between this action and the last action on the token)
@@ -43,7 +45,7 @@ class TokensListener():
         #get editor names by editor id
         self.token_source = self.token_source.rename(columns={"editor":'editor_id'})
         self.token_source['editor_id'] = self.token_source['editor_id'].astype(str)
-        tokens_merged = self.sources['editors'][['editor_id', 'name']].merge(self.token_source, right_index=True, on='editor_id', how='outer')
+        tokens_merged = self.editors[['editor_id', 'name']].merge(self.token_source, right_index=True, on='editor_id', how='outer')
         self.token_source = tokens_merged[tokens_merged['token'].notnull()].copy()
         
     def convert_time_diff(time_diff):
@@ -66,17 +68,17 @@ class TokensListener():
             diff = self.qgrid_selected_revision.get_selected_df().reset_index()['rev_id'].iloc[0]      
             
             # Print URL.
-            url = f"https://{self.lng}.wikipedia.org/w/index.php?&title={self.the_page['title'].replace(' ', '_')}&diff={diff}"
+            url = f"https://{self.lng}.wikipedia.org/w/index.php?&title={self.page_title}&diff={diff}"
             print('Link to the wikipedia diff: ')
             print(url)
         
     def listen(self, revid, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
-            self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
+            self.token_source = self.sources["tokens_all"].copy()
 
         else:
-            self.token_source = self.sources["cm_inc_stop"].all_actions.copy()
+            self.token_source = self.sources["tokens"].copy()
 
         #selected revision id:
         #self.rev_id = int(rev_id)
@@ -85,14 +87,14 @@ class TokensListener():
         self.rev_id = revid
         self.filtered_df = self.token_source[self.token_source['rev_id']==self.rev_id]
         if len(self.filtered_df) != 0:
-            editor_name = self.sources['editors'].loc[self.sources['editors']['editor_id'] == self.filtered_df['editor'].values[0], 'name'].values[0]
+            editor_name = self.editors.loc[self.editors['editor_id'] == self.filtered_df['editor'].values[0], 'name'].values[0]
         else:
             return display(md("No tokens in this revision!"))
         timestamp = pd.DatetimeIndex(self.token_source[self.token_source['rev_id']==self.rev_id]['rev_time'])[0]
         display(md(f"***Selected revision: ID: {self.rev_id}, editor name: {str(editor_name)}, timestamp: {str(timestamp.date())} {str(timestamp.time())}***"))
                    
         # Print URL to wikipedia diff.
-        url = f"https://{self.lng}.wikipedia.org/w/index.php?title={self.the_page['title']}&diff={self.rev_id}"
+        url = f"https://{self.lng}.wikipedia.org/w/index.php?title={self.page_title}&diff={self.rev_id}"
         display(HTML(f'<a href="{url}" target="_blank">Click here to see the Wikipedia Text DIFF</a>'))
             
         if  self.rev_id != None:

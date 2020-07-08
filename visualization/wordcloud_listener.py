@@ -24,16 +24,21 @@ class WCListener():
     def listen(self, _range1, _range2, editor, source, action, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
-            conflict_calculator = self.sources["cm_exc_stop"]
-            all_actions = self.sources["cm_exc_stop"].all_actions.copy()
-            elegible_actions = self.sources["cm_exc_stop"].elegible_actions.copy()
-            conflict_actions = self.sources["cm_exc_stop"].conflicts.copy()
+#             conflict_calculator = self.sources["cm_exc_stop"]
+#             all_actions = self.sources["cm_exc_stop"].all_actions.copy()
+#             elegible_actions = self.sources["cm_exc_stop"].elegible_actions.copy()
+#             conflict_actions = self.sources["cm_exc_stop"].conflicts.copy()
+            all_actions = self.sources["tokens_source"]["tokens_all"].copy()
+            elegible_actions = self.sources["tokens_source"]["elegibles_all"].copy()
+            conflict_actions = self.sources["tokens_source"]["conflicts_all"].copy()
         else:
-            conflict_calculator = self.sources["cm_inc_stop"]
-            all_actions = self.sources["cm_inc_stop"].all_actions.copy()
-            elegible_actions = self.sources["cm_inc_stop"].elegible_actions.copy()
-            conflict_actions = self.sources["cm_inc_stop"].conflicts.copy()
-
+#             conflict_calculator = self.sources["cm_inc_stop"]
+#             all_actions = self.sources["cm_inc_stop"].all_actions.copy()
+#             elegible_actions = self.sources["cm_inc_stop"].elegible_actions.copy()
+#             conflict_actions = self.sources["cm_inc_stop"].conflicts.copy()
+            all_actions = self.sources["tokens_source"]["tokens"].copy()
+            elegible_actions = self.sources["tokens_source"]["elegibles"].copy()
+            conflict_actions = self.sources["tokens_source"]["conflicts"].copy()
 
         if (self.specific_editor != None) & (self.conflict_editor is None):
             conflict_all = all_actions[all_actions['editor']==self.specific_editor]
@@ -171,12 +176,14 @@ class WCActionsListener():
        
         # Get source data.
         if stopwords == 'Not included':
-            self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
+#             self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
+            self.token_source = self.sources["tokens_source"]["tokens_all"].copy()
             add_actions = self.sources["tokens_exc_stop"]["adds"]
             del_actions = self.sources["tokens_exc_stop"]["dels"]
             rein_actions = self.sources["tokens_exc_stop"]["reins"]
         else:
-            self.token_source = self.sources["cm_inc_stop"].all_actions.copy()
+#             self.token_source = self.sources["cm_inc_stop"].all_actions.copy()
+            self.token_source = self.sources["tokens_source"]["tokens"].copy()
             add_actions = self.sources["tokens_inc_stop"]["adds"]
             del_actions = self.sources["tokens_inc_stop"]["dels"]
             rein_actions = self.sources["tokens_inc_stop"]["reins"]
