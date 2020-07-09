@@ -177,10 +177,12 @@ class ConflictsListener():
     
 class ConflictsActionListener():
     
-    def __init__(self, sources, lng, the_page):
+    def __init__(self, sources, lng):
         self.sources=sources
         self.lng = lng
-        self.the_page = the_page
+        
+        # Modify datetime format.
+        self.sources["Revisions"].loc[:, "rev_time"] = pd.to_datetime(self.sources["Revisions"]['rev_time'])
         
     def on_selection_change(self, change):
         with self.out21:
@@ -190,7 +192,8 @@ class ConflictsActionListener():
             diff = self.qgrid_token_obj.get_selected_df().reset_index()['rev_id'].iloc[0]      
             
             # Print URL.
-            url = f"https://{self.lng}.wikipedia.org/w/index.php?&title={self.the_page['title'].replace(' ', '_')}&diff={diff}"
+            page_title = self.sources["Revisions"]["article_title"].unique()[0]
+            url = f"https://{self.lng}.wikipedia.org/w/index.php?&title={page_title}&diff={diff}"
             print('Link to the wikipedia diff: ')
             print(url)
         
@@ -230,7 +233,7 @@ class ConflictsActionListener():
         
         
     
-    def listen(self, stopwords, _range1, _range2):
+    def listen(self, _range1, _range2, stopwords):
         if stopwords == 'Not included':            
 #             conflict_calculator = self.sources["con_manager"]
             self.conflicts = self.sources["tokens_source"]["conflicts"].copy()

@@ -71,7 +71,7 @@ class TokensManager:
     
         return action
     
-    def token_survive(self):
+    def token_survive(self, reduce=False):
         sample = self.get_states()
         
         # Convert all 0-1 to boolean.
@@ -82,6 +82,12 @@ class TokensManager:
         adds_actions = self._action_survival(sample, 'bool_adds')
         dels_actions = self._action_survival(sample, 'bool_dels')
         reins_actions = self._action_survival(sample, 'bool_reins')
+        
+        if reduce:
+            cols_kept = ["rev_time", "editor", "token", "token_id", "survive"]
+            adds_actions = adds_actions[cols_kept]
+            dels_actions = dels_actions[cols_kept]
+            reins_actions = reins_actions[cols_kept]
         
         return adds_actions, dels_actions, reins_actions
         

@@ -9,7 +9,7 @@ from metrics.token import TokensManager
 
 class ActionsListener():
 
-    def __init__(self, sources, editor_column='name'):
+    def __init__(self, sources, lng, editor_column='name'):
         self.tokens_all = sources["tokens_all"]
         self.tokens = sources["tokens"]
         self.tokens_elegible = sources["elegibles"]
@@ -17,9 +17,10 @@ class ActionsListener():
         self.page_id = sources["tokens_all"]["page_id"].unique()[0]
         self.editor_column = editor_column
         self.df_plotted = None
+        self.lng = lng
         
     def get_main(self):
-        rough_agg, self.tokens_group_all, self.tokens_group = self.get_aggregation()
+        rough_agg = self.get_aggregation()
         
         agg_columns = ['total', 'total_surv_48h', 'total_stopword_count']
         agg_actions = rough_agg.join(pd.DataFrame(
@@ -50,7 +51,7 @@ class ActionsListener():
         self.df = agg_actions
            
     def get_aggregation(self):
-        actions_agg, tokens_inc_stop, tokens_exc_stop = self.get_actions_aggregation()
+        actions_agg = self.get_actions_aggregation()
         elegible_actions, conflict_actions = self.elegibles_conflicts()
         editor_revisions = self.get_revisions()
         elegibles_merge = actions_agg.merge(elegible_actions, on="rev_time",
@@ -62,16 +63,26 @@ class ActionsListener():
         agg_table = agg_table.sort_values("rev_time").reset_index(drop=True)
         agg_table.insert(2, "page_id", self.page_id)
         
-        return agg_table, tokens_inc_stop, tokens_exc_stop
+        return agg_table
         
     def get_actions_aggregation(self):
         """Include stopwords, also count the stopwords."""
         print("Processing collected tokens...")
-        actions_all_dict, tokens_inc_stop = self.aggregation_dicts(self.tokens_all)
-        actions_dict, tokens_exc_stop = self.aggregation_dicts(self.tokens)
+        self.tokens_group_all = {}
+        self.tokens_group_all["adds"], self.tokens_group_all["dels"], self.tokens_group_all["reins"] = self.get_tokens_states(self.tokens_all)
+        
+        self.tokens_group = self.remove_stopwords(self.tokens_group_all)
+        
+        actions_all_dict = self.aggregation_dicts(self.tokens_group_all)
+        actions_dict = self.aggregation_dicts(self.tokens_group)
         
         merge_inc = self.actions_agg(actions_all_dict)
         merge_noinc = self.actions_agg(actions_dict)
+        
+        self.test_actions_all = actions_all_dict
+        self.test_actions = actions_dict
+        self.test_merge_inc = merge_inc
+        self.test_merge_noinc = merge_noinc
         
         comp_cols = ["rev_time", "adds", "dels", "reins"]
         inc_and_noinc = merge_inc[comp_cols].merge(merge_noinc[comp_cols], on="rev_time", how="outer").fillna(0)
@@ -87,39 +98,35 @@ class ActionsListener():
                                                 "reins", "reins_surv_48h", "reins_stopword_count",]]
         
         
-        return final_merge, tokens_inc_stop, tokens_exc_stop
+        return final_merge
     
     
-    def __group_actions(self, actions):
+    def _group_actions(self, actions):
         actions = actions.reset_index()
         actions["rev_time"] = actions["rev_time"].values.astype("datetime64[s]")
         group_actions = actions.groupby(["rev_time", "editor"]).agg({"token_id": "count"}).reset_index()
 
         return group_actions
 
-
-    def aggregation_dicts(self, source):
+    def get_tokens_states(self, source):
         # Use TokensManager to analyse.
         token_manager = TokensManager(source)
-        adds, dels, reins = token_manager.token_survive()
+        adds, dels, reins = token_manager.token_survive(reduce=True)
         
-        adds_surv = adds[adds["survive"] == 1]
-        dels_surv = dels[dels["survive"] == 1]
-        reins_surv = reins[reins["survive"] == 1]
-
+        return adds, dels, reins
+    
+    def aggregation_dicts(self, tokens_dict):
         # Get grouped data.
-        grouped = {"adds":adds,
-                 "adds_surv_48h":adds_surv,
-                 "dels":dels,
-                 "dels_surv_48h": dels_surv,
-                 "reins":reins,               
-                 "reins_surv_48h": reins_surv}
+        grouped = {"adds":tokens_dict["adds"],
+                 "adds_surv_48h":tokens_dict["adds"][tokens_dict["adds"]["survive"] == 1],
+                 "dels":tokens_dict["dels"],
+                 "dels_surv_48h": tokens_dict["dels"][tokens_dict["dels"]["survive"] == 1],
+                 "reins":tokens_dict["reins"],               
+                 "reins_surv_48h": tokens_dict["reins"][tokens_dict["reins"]["survive"] == 1]}
         for key, data in grouped.items():
-            grouped[key] = self.__group_actions(data).rename({"token_id": key}, axis=1)
+            grouped[key] = self._group_actions(data).rename({"token_id": key}, axis=1)
         
-        tokenmanager_data = {"adds": adds, "dels": dels, "reins": reins}
-        
-        return grouped, tokenmanager_data
+        return grouped
 
 
     def actions_agg(self, dict_for_actions):
@@ -168,6 +175,26 @@ class ActionsListener():
             integer = 0
 
         return integer
+    
+    def remove_stopwords(self, actions):
+        """Open a list of stop words and remove from the dataframe the tokens that 
+        belong to this list.
+        """
+        if self.lng == 'en':
+            stopwords_fn='data/stopword_list.txt'
+        elif self.lng == 'de':
+            stopwords_fn='data/stopword_list_de.txt'
+        else:
+            stopwords_fn='data/stopword_list.txt'
+            
+        stop_words = open(stopwords_fn, 'r').read().split()
+        
+        if type(actions) == dict:
+            for key, value in actions.items():
+                actions[key] = value[~value['token'].isin(stop_words)]
+            return actions
+        else:
+            return actions[~actions['token'].isin(stop_words)]
     
     def listen(self, _range1, _range2, editor, granularity,
                black, red, blue, green, black_conflict, red_conflict):
