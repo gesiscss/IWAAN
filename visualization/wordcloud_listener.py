@@ -22,59 +22,68 @@ class WCListener():
                
 
     def listen(self, _range1, _range2, editor, source, action, stopwords):
-        # Get source data through ConflictManager. 
-        if stopwords == 'Not included':
-#             conflict_calculator = self.sources["cm_exc_stop"]
-#             all_actions = self.sources["cm_exc_stop"].all_actions.copy()
-#             elegible_actions = self.sources["cm_exc_stop"].elegible_actions.copy()
-#             conflict_actions = self.sources["cm_exc_stop"].conflicts.copy()
-            all_actions = self.sources["tokens_source"]["tokens_all"].copy()
-            elegible_actions = self.sources["tokens_source"]["elegibles_all"].copy()
-            conflict_actions = self.sources["tokens_source"]["conflicts_all"].copy()
+        # Get source data through ConflictManager.
+        if stopwords == "Not included":
+            self.source_data = {
+                'All Actions': self.sources["tokens_source"]["tokens"],
+                'Elegible Actions': self.sources["tokens_source"]["elegibles"],
+                'Only Conflicts': self.sources["tokens_source"]["conflicts"]
+            }
         else:
-#             conflict_calculator = self.sources["cm_inc_stop"]
-#             all_actions = self.sources["cm_inc_stop"].all_actions.copy()
-#             elegible_actions = self.sources["cm_inc_stop"].elegible_actions.copy()
-#             conflict_actions = self.sources["cm_inc_stop"].conflicts.copy()
-            all_actions = self.sources["tokens_source"]["tokens"].copy()
-            elegible_actions = self.sources["tokens_source"]["elegibles"].copy()
-            conflict_actions = self.sources["tokens_source"]["conflicts"].copy()
-
-        if (self.specific_editor != None) & (self.conflict_editor is None):
-            conflict_all = all_actions[all_actions['editor']==self.specific_editor]
-            conflict_elegible = elegible_actions[elegible_actions['editor']==self.specific_editor]
-            conflict_conflicts = conflicts[conflicts['editor']==self.specific_editor]
-            source_data = {
-                'All Actions': conflict_all,
-                'Elegible Actions': conflict_elegible,
-                'Only Conflicts': conflict_conflicts
-            } 
-        elif (self.specific_editor != None) & (self.conflict_editor is not None):
-            conflicting_actions = conflict_calculator.get_conflicting_actions(self.specific_editor)
-            
-            if len(self.conflict_editor) == 0:            
-                return 'Thallere is no other registered conflicting editor. Please try another one!'
-            else:      
-                self.conflict_editor['userid'] = self.conflict_editor['userid'].astype('str')
-                editor_conflicts = self.conflict_editor[['userid','name','registration']].merge(conflicting_actions, 
-                         left_on='userid', right_on='editor', how='left').set_index('userid')
-                source_data = {
-                    'Elegible Actions': editor_conflicts,
-                    'Only Conflicts': editor_conflicts[~editor_conflicts['conflict'].isnull()]
-                }
-        else:            
-            conflict_all = all_actions
-            conflict_elegible = elegible_actions
-            conflict_conflicts = conflict_actions
-
-            source_data = {
-                'All Actions': conflict_all,
-                'Elegible Actions': conflict_elegible,
-                'Only Conflicts': conflict_conflicts
+            self.source_data = {
+                'All Actions': self.sources["tokens_source"]["tokens_all"],
+                'Elegible Actions': self.sources["tokens_source"]["elegibles_all"],
+                'Only Conflicts': self.sources["tokens_source"]["conflicts_all"]
             }
             
-        self.source_data = source_data   
-        df = source_data[source]
+        
+#         if stopwords == 'Not included':
+#             all_actions = self.sources["tokens_source"]["tokens"].copy()
+#             elegible_actions = self.sources["tokens_source"]["elegibles"].copy()
+#             conflict_actions = self.sources["tokens_source"]["conflicts"].copy()
+#             print("all_actions", getsizeof(all_actions))
+#             print("elegible_actions", getsizeof(elegible_actions))
+#             print("conflict_actions", getsizeof(conflict_actions))
+#         else:
+#             all_actions = self.sources["tokens_source"]["tokens_all"].copy()
+#             elegible_actions = self.sources["tokens_source"]["elegibles_all"].copy()
+#             conflict_actions = self.sources["tokens_source"]["conflicts_all"].copy()
+
+#         if (self.specific_editor != None) & (self.conflict_editor is None):
+#             conflict_all = all_actions[all_actions['editor']==self.specific_editor]
+#             conflict_elegible = elegible_actions[elegible_actions['editor']==self.specific_editor]
+#             conflict_conflicts = conflicts[conflicts['editor']==self.specific_editor]
+#             source_data = {
+#                 'All Actions': conflict_all,
+#                 'Elegible Actions': conflict_elegible,
+#                 'Only Conflicts': conflict_conflicts
+#             } 
+#         elif (self.specific_editor != None) & (self.conflict_editor is not None):
+#             conflicting_actions = conflict_calculator.get_conflicting_actions(self.specific_editor)
+            
+#             if len(self.conflict_editor) == 0:            
+#                 return 'Thallere is no other registered conflicting editor. Please try another one!'
+#             else:      
+#                 self.conflict_editor['userid'] = self.conflict_editor['userid'].astype('str')
+#                 editor_conflicts = self.conflict_editor[['userid','name','registration']].merge(conflicting_actions, 
+#                          left_on='userid', right_on='editor', how='left').set_index('userid')
+#                 source_data = {
+#                     'Elegible Actions': editor_conflicts,
+#                     'Only Conflicts': editor_conflicts[~editor_conflicts['conflict'].isnull()]
+#                 }
+#         else:            
+#             conflict_all = all_actions
+#             conflict_elegible = elegible_actions
+#             conflict_conflicts = conflict_actions
+
+#             source_data = {
+#                 'All Actions': conflict_all,
+#                 'Elegible Actions': conflict_elegible,
+#                 'Only Conflicts': conflict_conflicts
+#             }
+            
+#         self.source_data = source_data   
+        df = self.source_data[source]
             
 
         df = df[(df.rev_time.dt.date >= _range1) &
@@ -127,9 +136,18 @@ class WCActionsListener():
         self.lng=lng
         self._range1 = 0
         self._range2 = 1
-        self.adds = None
-        self.dels = None
-        self.reins = None
+        
+    def select_token(self, token, range1, range2):
+        if self.stopwords == 'Not included':
+            token_source = self.sources["tokens_source"]["tokens"]
+        else:
+            token_source = self.sources["tokens_source"]["tokens_all"]
+            
+        ranged_token = token_source[(token_source['rev_time'].dt.date >= range1)\
+                          & (token_source['rev_time'].dt.date <= range2)]
+        
+        return ranged_token[ranged_token['token'] == token]
+            
         
                         
     def revid_selection_change(self, change):
@@ -149,7 +167,7 @@ class WCActionsListener():
 
             # Process the involved dataframe.
             token_selected = self.qgrid_token_obj.get_selected_df().reset_index()['string'].iloc[0]
-            selected_token = self.ranged_token[self.ranged_token['token'] == token_selected]
+            selected_token = self.select_token(token_selected, self._range1, self._range2)
             df_selected_token = selected_token.drop(['page_id', 'o_editor', 'token', 'o_rev_id', 'article_title'], axis=1)
             new_cols = ['token_id', 'action', 'rev_time', 'editor', 'rev_id']
             df_selected_token = df_selected_token[new_cols].rename({'editor': 'editor_id'}, axis=1)
@@ -175,33 +193,36 @@ class WCActionsListener():
                        
        
         # Get source data.
-        if stopwords == 'Not included':
+        self.stopwords = stopwords
+        if self.stopwords == 'Not included':
 #             self.token_source = self.sources["cm_exc_stop"].all_actions.copy()
-            self.token_source = self.sources["tokens_source"]["tokens_all"].copy()
+#             self.token_source = self.sources["tokens_source"]["tokens"].copy()
+            self.token_calculator = TokensManager(self.sources["tokens_source"]["tokens"])
             add_actions = self.sources["tokens_exc_stop"]["adds"]
             del_actions = self.sources["tokens_exc_stop"]["dels"]
             rein_actions = self.sources["tokens_exc_stop"]["reins"]
         else:
 #             self.token_source = self.sources["cm_inc_stop"].all_actions.copy()
-            self.token_source = self.sources["tokens_source"]["tokens"].copy()
+#             self.token_source = self.sources["tokens_source"]["tokens_all"].copy()
+            self.token_calculator = TokensManager(self.sources["tokens_source"]["tokens_all"])
             add_actions = self.sources["tokens_inc_stop"]["adds"]
             del_actions = self.sources["tokens_inc_stop"]["dels"]
             rein_actions = self.sources["tokens_inc_stop"]["reins"]
 
-        self.token_calculator = TokensManager(self.token_source)
+#         self.token_calculator = TokensManager(self.token_source)
 
         # For tokens.
-        df_token = (self.token_source).copy()
+#         df_token = (self.token_source).copy()
 
         #token_calculator = TokensManager(df_token, maxwords=self.max_words)        
         self._range1 = copy.copy(_range1)
         self._range2 = copy.copy(_range2)
-        self.adds = add_actions[(add_actions['rev_time'].dt.date >= _range1) & (add_actions['rev_time'].dt.date <= _range2)]
-        self.dels = del_actions[(del_actions['rev_time'].dt.date >= _range1) & (del_actions['rev_time'].dt.date <= _range2)]
-        self.reins = rein_actions[(rein_actions['rev_time'].dt.date >= _range1) & (rein_actions['rev_time'].dt.date <= _range2)]
-        self.ranged_token = df_token[(df_token['rev_time'].dt.date >= _range1) & (df_token['rev_time'].dt.date <= _range2)]
+        adds = add_actions[(add_actions['rev_time'].dt.date >= _range1) & (add_actions['rev_time'].dt.date <= _range2)]
+        dels = del_actions[(del_actions['rev_time'].dt.date >= _range1) & (del_actions['rev_time'].dt.date <= _range2)]
+        reins = rein_actions[(rein_actions['rev_time'].dt.date >= _range1) & (rein_actions['rev_time'].dt.date <= _range2)]
+#         self.ranged_token = self.token_source[(self.token_source['rev_time'].dt.date >= _range1) & (self.token_source['rev_time'].dt.date <= _range2)]
 
-        tokens_action_no_ratio = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins, maxwords=self.max_words, ratio=False)
+        tokens_action_no_ratio = self.token_calculator.get_all_tokens(adds, dels, reins, maxwords=self.max_words, ratio=False)
 
         symbol_dict = {'adds': '+', 'adds_48h': '!', 'dels': '-', 'dels_48h': '@', 'reins': '*', 'reins_48h': '#'}
         if action == 'All':
@@ -243,7 +264,7 @@ class WCActionsListener():
             display(
                 md("Cannot create the wordcloud, there were zero actions."))
 
-        tokens_action = self.token_calculator.get_all_tokens(self.adds, self.dels, self.reins)
+        tokens_action = self.token_calculator.get_all_tokens(adds, dels, reins)
         tokens_action.index = tokens_action.index.rename("string")
         if len(tokens_action) != 0:
             qgrid_token_obj = qgrid.show_grid(tokens_action,grid_options={'forceFitColumns':True})

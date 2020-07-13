@@ -24,14 +24,42 @@ def get_last_date_month(some_ts):
 def get_same_day(some_ts):
     return date(some_ts.year, some_ts.month, some_ts.day)
 
-def merged_tokens_and_elegibles(elegibles, tokens):
+def merged_tokens_and_elegibles(elegibles, tokens, drop=False):
     elegible_token = elegibles.set_index("rev_id")
     comp_tokens = tokens.copy()
     comp_tokens["revision"] = comp_tokens["rev_id"].astype(str)
     comp_tokens = comp_tokens.set_index("rev_id")
     tokens_with_conflict = comp_tokens.merge(elegible_token, how="left")
     
-    return tokens_with_conflict
+    if drop:
+        return tokens_with_conflict.drop_duplicates("revision").reset_index(drop=True)
+    else:
+        return tokens_with_conflict
+
+def remove_stopwords(actions, lng):
+    """Open a list of stop words and remove from the dataframe the tokens that 
+    belong to this list.
+    """
+    if lng == 'en':
+        stopwords_fn='data/stopword_list.txt'
+    elif lng == 'de':
+        stopwords_fn='data/stopword_list_de.txt'
+    else:
+        stopwords_fn='data/stopword_list.txt'
+
+    stop_words = open(stopwords_fn, 'r').read().split()
+
+    if type(actions) == dict:
+        for key, value in actions.items():
+            actions[key] = value[~value['token'].isin(stop_words)]
+        return actions
+    else:
+        return actions[~actions['token'].isin(stop_words)]
+    
+def mark_last_day(df):
+    df["last_day_month"] = df["rev_time"].dt.date.apply(get_last_date_month)
+    df["last_day_week"] = df["rev_time"].dt.date.apply(week_get_sunday)
+    df["this_day"] = df["rev_time"].dt.date.apply(get_same_day)
     
 
 class EditorsListener:
@@ -46,19 +74,19 @@ class EditorsListener:
         self.lng=lng
         
         print("Initializing...")
-        self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
-        self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
+#         self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
+#         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
         
-        self.actions["last_day_month"] = self.actions["rev_time"].dt.date.apply(get_last_date_month)
-        self.actions["last_day_week"] = self.actions["rev_time"].dt.date.apply(week_get_sunday)
-        self.actions["this_day"] = self.actions["rev_time"].dt.date.apply(get_same_day)
+#         self.actions["last_day_month"] = self.actions["rev_time"].dt.date.apply(get_last_date_month)
+#         self.actions["last_day_week"] = self.actions["rev_time"].dt.date.apply(week_get_sunday)
+#         self.actions["this_day"] = self.actions["rev_time"].dt.date.apply(get_same_day)
         
         
-        self.selected_rev = self.all_actions["revision"].iloc[-1]
+        self.selected_rev = str(self.all_tokens["rev_id"].iloc[-1])
         
         self.wikidv = sources["wiki_dv"]
 
-        self.revision_manager = RevisionsManager(self.df, self.all_actions, self.actions, None, self.lng)
+        self.revision_manager = RevisionsManager(self.df, self.all_elegibles, self.all_tokens, None, self.lng)
         
         self.search_widget = search_widget
         if self.search_widget != None:            
@@ -80,8 +108,7 @@ class EditorsListener:
         monthly_df = self.get_ratios(self.df, freq=freq)
                
         return monthly_df
-        
-    
+           
     def get_ratios(self, df_with_tf, freq):
         time_grouper = pd.Grouper(key="rev_time", freq=freq[0])
         df_ratios = df_with_tf.groupby([time_grouper, 
@@ -132,7 +159,11 @@ class EditorsListener:
     def calculate(self, monthly_tokens):
         opponent_dict = {}
         all_revs = sum(monthly_tokens.values(), [])
-        opponent_info = self.get_opponents(all_revs, self.actions)
+        
+        actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
+        mark_last_day(actions)
+        
+        opponent_info = self.get_opponents(all_revs, actions)
                         
         return opponent_info
     
@@ -204,9 +235,9 @@ class EditorsListener:
             date_selected = self.qgrid_obj.get_selected_df().reset_index()["rev_time"].iloc[0]
             editor_selected = self.qgrid_obj.get_selected_df().reset_index()["editor_id"].iloc[0]
             editor_name = self.qgrid_obj.get_selected_df().reset_index()["editor"].iloc[0]
-            page_title = self.actions["article_title"].unique()[0]
+            page_title = self.tokens["article_title"].unique()[0]
             display(md(f"Within **{self.current_freq}** timeframe, you have selected **{editor_name}** (id: {editor_selected})"))
-            display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={self.actions['article_title'].unique()[0]}&action=history' target='_blank'>{date_selected}</a>"))
+            display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={page_title}&action=history' target='_blank'>{date_selected}</a>"))
 
             second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
             second_df.rename({"main_opponent": "main_op", "stopwords_ratio": "SW_ratio",
@@ -225,7 +256,7 @@ class EditorsListener:
             display(self.out2)
             self.second_qgrid.observe(self.on_select_revision, names=['_selected_rows'])
         
-    
+        
     def listen(self, _range1, _range2, granularity):
         if (len(str(_range1.year)) < 4) | (len(str(_range2.year)) < 4):
             return display(md("Please enter the correct date!"))
@@ -268,12 +299,12 @@ class EditorsListener:
         
 class RevisionsManager:
     
-    def __init__(self, agg, merged_all_actions, merged_actions, opponents_info, lng):
+    def __init__(self, agg, all_elegibles, all_tokens, opponents_info, lng):
         self.agg_actions = agg
         self.names_dict = agg[["editor_str", "editor"]].drop_duplicates().set_index("editor_str")["editor"].to_dict()
         
-        self.actions_inc_stop = merged_all_actions
-        self.actions_exc_stop = merged_actions
+        self.all_elegibles = all_elegibles
+        self.all_tokens = all_tokens
         self.opponents_info = opponents_info
         
         self.lng=lng
@@ -291,7 +322,7 @@ class RevisionsManager:
         return df_merge2
 
     def add_revision_id(self):
-        no_dup_actions = self.actions_inc_stop.drop_duplicates("revision").reset_index(drop=True)
+        no_dup_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens, drop=True)
         no_dup_actions["rev_time"] = no_dup_actions["rev_time"].astype("datetime64[ns]")
         revs_to_merged = no_dup_actions[["rev_time", "revision"]]
         agg_with_revs = self.agg_actions.merge(revs_to_merged, on="rev_time", how="left")
@@ -355,8 +386,11 @@ class RevisionsManager:
         second_revs = df_agg["rev_id"].values
 
         rev_conflicts = pd.DataFrame(columns=["rev_id", "main_opponent", "min_react"])
+        actions_exc_stop = remove_stopwords(merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens), self.lng).reset_index(drop=True)
+        mark_last_day(actions_exc_stop)
+        
         for idx, rev in enumerate(second_revs):
-            some_rev = self.actions_exc_stop[self.actions_exc_stop["revision"] == rev]
+            some_rev = actions_exc_stop[actions_exc_stop["revision"] == rev]
             if len(some_rev) != 0:
                 rev_conflicts.loc[idx] = [rev] + list(self.get_most_conflict_from_rev(some_rev))
                 

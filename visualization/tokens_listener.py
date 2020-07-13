@@ -75,10 +75,15 @@ class TokensListener():
     def listen(self, revid, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
-            self.token_source = self.sources["tokens_all"].copy()
-
+            link_token = self.sources["tokens"]
+            self.token_source = link_token
+            del link_token
         else:
-            self.token_source = self.sources["tokens"].copy()
+            link_token = self.sources["tokens_all"]
+            self.token_source = link_token
+            del link_token
+        
+        self.token_source = self.token_source.reset_index(drop=True)
 
         #selected revision id:
         #self.rev_id = int(rev_id)
