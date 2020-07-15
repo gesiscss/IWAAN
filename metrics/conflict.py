@@ -259,7 +259,4 @@ class ConflictManager:
         return joined.sort_values('conflict_score', ascending=False)
 
     def get_source_dict(self):
-        self.source = {"tokens_all": self.all_actions, "elegibles_all": self.elegible_actions, "conflicts_all": self.conflicts,
-               "tokens": self.remove_stopwords(self.all_actions),
-               "elegibles": self.remove_stopwords(self.elegible_actions),
-               "conflicts": self.remove_stopwords(self.conflicts)}
+        self.source = {"tokens_all": self.all_actions, "elegibles_all": self.elegible_actions, "conflicts_all": self.conflicts}
