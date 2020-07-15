@@ -66,22 +66,13 @@ class EditorsListener:
     
     def __init__(self, agg, sources, lng, search_widget=None):
         self.df = agg
-        self.elegibles = sources["elegibles"]
-        self.tokens = sources["tokens"]
         self.all_elegibles = sources["elegibles_all"]
         self.all_tokens = sources["tokens_all"]
         self.names_id = dict(zip(agg["editor_str"], agg["editor"]))
         self.lng=lng
         
         print("Initializing...")
-#         self.actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
-#         self.all_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens)
-        
-#         self.actions["last_day_month"] = self.actions["rev_time"].dt.date.apply(get_last_date_month)
-#         self.actions["last_day_week"] = self.actions["rev_time"].dt.date.apply(week_get_sunday)
-#         self.actions["this_day"] = self.actions["rev_time"].dt.date.apply(get_same_day)
-        
-        
+               
         self.selected_rev = str(self.all_tokens["rev_id"].iloc[-1])
         
         self.wikidv = sources["wiki_dv"]
@@ -96,7 +87,7 @@ class EditorsListener:
         
         
     def get_infos(self):
-        monthly_dict = self.get_daily_tokens(self.tokens)
+        monthly_dict = self.get_daily_tokens(remove_stopwords(self.all_tokens, self.lng))
         print("Calculating...")
         opponent_info = self.calculate(monthly_dict)
         self.revision_manager.opponents_info = opponent_info
@@ -160,7 +151,9 @@ class EditorsListener:
         opponent_dict = {}
         all_revs = sum(monthly_tokens.values(), [])
         
-        actions = merged_tokens_and_elegibles(self.elegibles, self.tokens)
+        tokens_no_stopwords = remove_stopwords(self.all_tokens, self.lng)
+        elegibles_no_stopwords = remove_stopwords(self.all_elegibles, self.lng)
+        actions = merged_tokens_and_elegibles(elegibles_no_stopwords, tokens_no_stopwords)
         mark_last_day(actions)
         
         opponent_info = self.get_opponents(all_revs, actions)
@@ -235,7 +228,7 @@ class EditorsListener:
             date_selected = self.qgrid_obj.get_selected_df().reset_index()["rev_time"].iloc[0]
             editor_selected = self.qgrid_obj.get_selected_df().reset_index()["editor_id"].iloc[0]
             editor_name = self.qgrid_obj.get_selected_df().reset_index()["editor"].iloc[0]
-            page_title = self.tokens["article_title"].unique()[0]
+            page_title = self.all_tokens["article_title"].unique()[0]
             display(md(f"Within **{self.current_freq}** timeframe, you have selected **{editor_name}** (id: {editor_selected})"))
             display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={page_title}&action=history' target='_blank'>{date_selected}</a>"))
 

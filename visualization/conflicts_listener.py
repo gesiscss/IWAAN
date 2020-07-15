@@ -9,6 +9,7 @@ from utils.notebooks import get_previous_notebook
 
 from metrics.conflict import ConflictManager
 from metrics.token import TokensManager
+from .editors_listener import remove_stopwords
 
 import calendar
 from datetime import date, timedelta
@@ -184,6 +185,8 @@ class ConflictsActionListener():
         # Modify datetime format.
         self.sources["Revisions"].loc[:, "rev_time"] = pd.to_datetime(self.sources["Revisions"]['rev_time'])
         
+        self.conflicts_dict = {"Not included": None, "Included": None}
+        
     def on_selection_change(self, change):
         with self.out21:
             clear_output()
@@ -197,34 +200,36 @@ class ConflictsActionListener():
             print('Link to the wikipedia diff: ')
             print(url)
         
-    def add_columns(self):
+    def add_columns(self, df):
         #time_diff_secs
-        self.conflicts['time_diff_secs'] = self.conflicts['time_diff'].dt.total_seconds()
+        df['time_diff_secs'] = df['time_diff'].dt.total_seconds()
         #editor names
-        self.conflicts = self.conflicts.rename(columns={"editor":'editor_id'})
+        df = df.rename(columns={"editor":'editor_id'})
         self.sources['Editors']['editor_id'] = self.sources['Editors']['editor_id'].astype(str)
-        self.conflicts['editor_id'] = self.conflicts['editor_id'].astype(str)
-        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(self.conflicts, right_index=True, on='editor_id', how='outer')
-        self.conflicts = conflicts_merged[conflicts_merged['token'].notnull()].copy()
+        df['editor_id'] = df['editor_id'].astype(str)
+        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(df, right_index=True, on='editor_id', how='outer')
+        df = conflicts_merged[conflicts_merged['token'].notnull()].copy()
         
         #filling values for original insertions
-        original = pd.merge(self.conflicts[self.conflicts['rev_id'] == -1], self.sources['Revisions'][['rev_time', 'rev_id']],how='left', left_on='o_rev_id', right_on='rev_id')
-        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'rev_time'] = original['rev_time_y'].tolist()
-        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'editor_id'] = self.conflicts.loc[self.conflicts['rev_id'] == -1, 'o_editor']
-        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff'] = 0
-        self.conflicts.loc[self.conflicts['rev_id'] == -1, 'time_diff_secs'] = 0
-        self.conflicts.loc[(self.conflicts['action'] == 'in') & (self.conflicts['rev_id'] == -1), 'rev_id'] = self.conflicts.loc[(self.conflicts['action'] == 'in') & (self.conflicts['rev_id'] == -1), 'o_rev_id']
-        self.conflicts = self.conflicts.loc[self.conflicts['rev_id'] != -1]
+        original = pd.merge(df[df['rev_id'] == -1], self.sources['Revisions'][['rev_time', 'rev_id']],how='left', left_on='o_rev_id', right_on='rev_id')
+        df.loc[df['rev_id'] == -1, 'rev_time'] = original['rev_time_y'].tolist()
+        df.loc[df['rev_id'] == -1, 'editor_id'] = df.loc[df['rev_id'] == -1, 'o_editor']
+        df.loc[df['rev_id'] == -1, 'time_diff'] = 0
+        df.loc[df['rev_id'] == -1, 'time_diff_secs'] = 0
+        df.loc[(df['action'] == 'in') & (df['rev_id'] == -1), 'rev_id'] = df.loc[(df['action'] == 'in') & (df['rev_id'] == -1), 'o_rev_id']
+        df = df.loc[df['rev_id'] != -1]
         
         #order and count columns
         #self.conflicts.reset_index(inplace=True)
-        counts = self.conflicts[['token_id', 'token']].groupby(['token_id']).count()
+        counts = df[['token_id', 'token']].groupby(['token_id']).count()
         #count column
-        self.conflicts = counts.merge(self.conflicts, right_index=True, on='token_id', how='outer').rename(columns = {'token_x':'count','token_y':'token'}).reset_index()
+        df = counts.merge(df, right_index=True, on='token_id', how='outer').rename(columns = {'token_x':'count','token_y':'token'}).reset_index()
         #order column
-        g = self.conflicts.sort_values(['time_diff_secs']).groupby('token_id', as_index=False)
-        self.conflicts['order'] = g.cumcount()
-        self.conflicts['order'] = self.conflicts['order'].apply(lambda x: x + 1)
+        g = df.sort_values(['time_diff_secs']).groupby('token_id', as_index=False)
+        df['order'] = g.cumcount()
+        df['order'] = df['order'].apply(lambda x: x + 1)
+        
+        return df
 
 #         for token_id in self.conflicts['token_id'].unique():
 #             token_df = self.conflicts.loc[self.conflicts['token_id'] == token_id].sort_values(by='time_diff_secs').copy()
@@ -232,33 +237,44 @@ class ConflictsActionListener():
 #             self.conflicts.loc[token_df.index, 'count'] = len(token_df)
         
         
-    
+    def get_displayed_df(self, _range1, _range2, df):
+        conflicts_for_grid = df[[
+            'order', 'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'name', 'editor_id', 'time_diff_secs','rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
+        conflicts_for_grid['timestamp'] = pd.to_datetime(conflicts_for_grid['timestamp'], cache=False, utc=True).dt.date
+        conflicts_for_grid = conflicts_for_grid[(conflicts_for_grid.timestamp >= _range1) &
+            (conflicts_for_grid.timestamp <= _range2)]
+        conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(int).astype(str)
+        conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(int).astype(str)
+        conflicts_for_grid['editor_id'] = conflicts_for_grid['editor_id'].astype(str)
+        conflicts_for_grid.set_index('token_id', inplace=True)
+        
+        return conflicts_for_grid.loc[conflicts_for_grid['string']!='<!--']
+        
     def listen(self, _range1, _range2, stopwords):
-        if stopwords == 'Not included':            
-#             conflict_calculator = self.sources["con_manager"]
-            self.conflicts = self.sources["tokens_source"]["conflicts"].copy()
-            
+        if stopwords == 'Not included':
+            if self.conflicts_dict["Not included"] is None:
+                conflicts_not_included = remove_stopwords(self.sources["tokens_source"]["conflicts_all"],self.lng).reset_index(drop=True)
+                self.conflicts_dict["Not included"] = self.add_columns(conflicts_not_included)
+                self.conflicts_dict["Not included"] = self.get_displayed_df(_range1, _range2, self.conflicts_dict["Not included"])
+                conflicts = self.conflicts_dict["Not included"]
+            else:
+                conflicts = self.conflicts_dict["Not included"]
+                
         else:
-            self.conflicts = self.sources["tokens_source"]["conflicts_all"].copy()
-#             conflict_calculator = self.sources["con_manager_all"]
-
-        # display the tokens, the difference in seconds and its corresponding conflict score
-#         self.conflicts = conflict_calculator.conflicts.copy()
-        self.add_columns()
-
-        if len(self.conflicts) > 0:
-            conflicts_for_grid = self.conflicts[[
-                'order', 'count', 'action',  'token', 'token_id', 'conflict', 'rev_time', 'name', 'editor_id', 'time_diff_secs','rev_id']].rename(columns={'token': 'string', 'rev_time':'timestamp', 'name':'editor_name'}).sort_values('conflict', ascending=False)
-            conflicts_for_grid['timestamp'] = pd.to_datetime(conflicts_for_grid['timestamp'], cache=False, utc=True).dt.date
-            conflicts_for_grid = conflicts_for_grid[(conflicts_for_grid.timestamp >= _range1) &
-                (conflicts_for_grid.timestamp <= _range2)]
-            conflicts_for_grid['token_id'] = conflicts_for_grid['token_id'].astype(int).astype(str)
-            conflicts_for_grid['rev_id'] = conflicts_for_grid['rev_id'].astype(int).astype(str)
-            conflicts_for_grid['editor_id'] = conflicts_for_grid['editor_id'].astype(str)
-            conflicts_for_grid.set_index('token_id', inplace=True)
-            self.df_for_grid = conflicts_for_grid.loc[conflicts_for_grid['string']!='<!--'].copy()
-            qgrid_token_obj = qgrid.show_grid(self.df_for_grid,grid_options={'forceFitColumns':False})
-            self.qgrid_token_obj = qgrid_token_obj
+            if self.conflicts_dict["Included"] is None:
+                link_df = self.sources["tokens_source"]["conflicts_all"]
+                self.conflicts_dict["Included"] = link_df
+                del link_df
+                conflicts_included = self.add_columns(self.conflicts_dict["Included"])
+                self.conflicts_dict["Included"] = self.add_columns(conflicts_included)
+                self.conflicts_dict["Not Included"] = self.get_displayed_df(_range1, _range2, self.conflicts_dict["Included"])
+                conflicts = self.conflicts_dict["Included"]
+            else:
+                conflicts = self.conflicts_dict["Included"]
+            
+        
+        if len(conflicts) > 0:
+            self.qgrid_token_obj = qgrid.show_grid(conflicts,grid_options={'forceFitColumns':False})
             display(self.qgrid_token_obj)
             self.out21 = Output()
             display(self.out21)

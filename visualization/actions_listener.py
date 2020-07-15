@@ -5,14 +5,14 @@ from plotly.subplots import make_subplots
 from ipywidgets.widgets import Output
 
 from metrics.token import TokensManager
+from .editors_listener import remove_stopwords
 
 
 class ActionsListener():
 
     def __init__(self, sources, lng, editor_column='name'):
         self.tokens_all = sources["tokens_all"]
-        self.tokens = sources["tokens"]
-        self.tokens_elegible = sources["elegibles"]
+        self.tokens_elegibles_all = sources["elegibles_all"]
         self.wikidv = sources["wiki_dv"]
         self.page_id = sources["tokens_all"]["page_id"].unique()[0]
         self.editor_column = editor_column
@@ -146,13 +146,14 @@ class ActionsListener():
     def elegibles_conflicts(self):
         """Exclude stopwords."""
         # Elegibles and conflict scores (not normalized)
-        elegible_actions = self.tokens_elegible.groupby(["rev_time", 
+        elegible_no_stopwords = remove_stopwords(self.tokens_elegibles_all, self.lng)
+        elegible_actions = elegible_no_stopwords.groupby(["rev_time", 
                                        "editor"]).agg({'conflict': 'sum', 
                                                  "action":"count"}).reset_index().rename({"action":"elegibles"}, axis=1)
         elegible_actions["rev_time"] = elegible_actions["rev_time"].values.astype("datetime64[s]")
 
         # Conflicts
-        token_conflict = self.tokens_elegible[~self.tokens_elegible["conflict"].isnull()]
+        token_conflict = elegible_no_stopwords[~elegible_no_stopwords["conflict"].isnull()]
         conflict_actions = token_conflict.groupby(["rev_time", 
                                     "editor"]).agg({"action":"count"}).reset_index().rename({"action":"conflicts"}, axis=1)
         conflict_actions["rev_time"] = conflict_actions["rev_time"].values.astype("datetime64[s]")
