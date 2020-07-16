@@ -250,7 +250,7 @@ class ConflictsActionListener():
         
         return conflicts_for_grid.loc[conflicts_for_grid['string']!='<!--']
         
-    def listen(self, _range1, _range2, stopwords):
+    def listen_to_interact(self, _range1, _range2, stopwords):
         if stopwords == 'Not included':
             if self.conflicts_dict["Not included"] is None:
                 conflicts_not_included = remove_stopwords(self.sources["tokens_source"]["conflicts_all"],self.lng).reset_index(drop=True)
@@ -279,6 +279,37 @@ class ConflictsActionListener():
             self.out21 = Output()
             display(self.out21)
             self.qgrid_token_obj.observe(self.on_selection_change, names=['_selected_rows'])
+            
+        else:
+            display(md(f'**There are no conflicting tokens in this page.**'))
+            display(HTML(f'<a href="{get_previous_notebook()}" target="_blank">Go back to the previous workbook</a>'))
+            
+    def listen(self, _range1, _range2, stopwords):
+        if stopwords == 'Not included':
+            if self.conflicts_dict["Not included"] is None:
+                conflicts_not_included = remove_stopwords(self.sources["tokens_source"]["conflicts_all"],self.lng).reset_index(drop=True)
+                self.conflicts_dict["Not included"] = self.add_columns(conflicts_not_included)
+                self.conflicts_dict["Not included"] = self.get_displayed_df(_range1, _range2, self.conflicts_dict["Not included"])
+                conflicts = self.conflicts_dict["Not included"]
+            else:
+                conflicts = self.conflicts_dict["Not included"]
+                
+        else:
+            if self.conflicts_dict["Included"] is None:
+                link_df = self.sources["tokens_source"]["conflicts_all"]
+                self.conflicts_dict["Included"] = link_df
+                del link_df
+                conflicts_included = self.add_columns(self.conflicts_dict["Included"])
+                self.conflicts_dict["Included"] = self.add_columns(conflicts_included)
+                self.conflicts_dict["Not Included"] = self.get_displayed_df(_range1, _range2, self.conflicts_dict["Included"])
+                conflicts = self.conflicts_dict["Included"]
+            else:
+                conflicts = self.conflicts_dict["Included"]
+            
+        
+        if len(conflicts) > 0:
+            qgrid_token_obj = qgrid.show_grid(conflicts,grid_options={'forceFitColumns':False})
+            display(qgrid_token_obj)
             
         else:
             display(md(f'**There are no conflicting tokens in this page.**'))
