@@ -304,3 +304,58 @@ class ActionsListener():
         )
 
         return df
+    
+    def actions_listen(self, _range1, _range2, editor, granularity,
+               black, red, blue, green):
+        df = self.actions_one_editor
+
+        df = df[(df.rev_time.dt.date >= _range1) &
+                (df.rev_time.dt.date <= _range2)]
+
+        if editor != 'All':
+            df = df[df[self.editor_column] == editor]
+            
+        if (granularity[0] == "D") or (granularity[0] == "W"):
+            df = df.groupby(pd.Grouper(
+                key='rev_time', freq=granularity[0])).sum().reset_index()
+        else:
+            df = df.groupby(pd.Grouper(
+                key='rev_time', freq=granularity[0]+'S')).sum().reset_index()
+
+        data = [
+            graph_objs.Scatter(
+                x=df['rev_time'], y=df[black],
+                name=black,
+                marker=dict(color='rgba(0, 0, 0, 1)'))
+        ]
+
+        if red != 'None':
+            data.append(graph_objs.Scatter(
+                x=df['rev_time'], y=df[red],
+                name=red,
+                marker=dict(color='rgba(255, 0, 0, .8)')))
+
+        if blue != 'None':
+            data.append(graph_objs.Scatter(
+                x=df['rev_time'], y=df[blue],
+                name=blue,
+                marker=dict(color='rgba(0, 153, 255, .8)')))           
+
+        if green != 'None':
+            data.append(graph_objs.Scatter(
+                x=df['rev_time'], y=df[green],
+                name=green,
+                marker=dict(color='rgba(0, 128, 43, 1)')))
+
+        self.df_plotted = df
+
+        layout = graph_objs.Layout(hovermode='closest',
+                                   xaxis=dict(title=granularity, ticklen=5,
+                                              zeroline=True, gridwidth=2),
+                                   yaxis=dict(title='Actions',
+                                              ticklen=5, gridwidth=2),
+                                   legend=dict(x=0.5, y=1.2),
+                                   showlegend=True, barmode='group')
+
+        plotly.offline.init_notebook_mode(connected=True)        
+        plotly.offline.iplot({"data": data, "layout": layout})
