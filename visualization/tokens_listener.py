@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from IPython.display import display, Markdown as md, clear_output, HTML
 from ipywidgets import Output, fixed
 from .wordclouder import WordClouder
+from .editors_listener import remove_stopwords
 
 from metrics.token import TokensManager
 from metrics.conflict import ConflictManager
@@ -19,7 +20,7 @@ class TokensListener():
                                                        "editor": "name"}, axis=1).reset_index(drop=True)
         self.sources = sources
         self.lng = lng
-        self.page_title = sources["tokens"]["article_title"].unique()[0]
+        self.page_title = sources["tokens_all"]["article_title"].unique()[0]
         
     def get_columns(self):
         #create columns 'time_diff' (Time in sec between this action and the last action on the token)
@@ -75,10 +76,15 @@ class TokensListener():
     def listen(self, revid, stopwords):
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
-            self.token_source = self.sources["tokens_all"].copy()
-
+            link_token = remove_stopwords(self.sources["tokens_all"], self.lng)
+            self.token_source = link_token
+            del link_token
         else:
-            self.token_source = self.sources["tokens"].copy()
+            link_token = self.sources["tokens_all"]
+            self.token_source = link_token
+            del link_token
+        
+        self.token_source = self.token_source.reset_index(drop=True)
 
         #selected revision id:
         #self.rev_id = int(rev_id)
