@@ -107,11 +107,20 @@ class WikipediaDV(DataView):
         return pd.DataFrame(x for x in chain(*res))
     
     def get_talk_content(self, pageid: Union[int, str]) -> pd.Series:
+        res = self.api.get_talk_content(pageid, continue_param=None) 
+        talk_content = pd.DataFrame(next(iter(res["query"]["pages"].values()))["revisions"])
+        while True:
+            if 'continue' in res.keys():
+                continue_param = 'continue=' + res['continue']['continue'] + '&rvcontinue=' + res['continue']['rvcontinue']
+                res = self.api.get_talk_content(pageid, continue_param=continue_param) 
+                temp = pd.DataFrame(next(iter(res["query"]["pages"].values()))["revisions"])
+                talk_content = talk_content.append(temp, sort=True)
+                
+            else:
+                break
+        
 
-        res = self.api.get_talk_content(pageid) 
-        talk_content = next(iter(res["query"]["pages"].values()))
-
-        return pd.DataFrame(talk_content["revisions"])
+        return talk_content
     
     def get_talk_rev_diff(self, fromrev, torev) -> pd.Series:
 
@@ -238,8 +247,11 @@ class WikipediaAPI(API):
 
         return self.request(url)
     
-    def get_talk_content(self, pageid: Union[int, str]) -> dict:
-        url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|ids|user|comment&pageids={pageid}'
+    def get_talk_content(self, pageid: Union[int, str], continue_param: str) -> dict:
+        if continue_param:
+            url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|ids|user|comment&pageids={pageid}&{continue_param}'
+        else:
+            url = f'{self.base}action=query&format=json&prop=revisions&rvlimit=max&rvprop=timestamp|ids|user|comment&pageids={pageid}'
 
         return self.request(url)
     
