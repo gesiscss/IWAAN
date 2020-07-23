@@ -25,11 +25,15 @@ class ProtectListener():
             self.exp_str = "expires"
         
     def get_protect(self, level="semi_edit"):
-        """"""
-        judge_df = self.df.drop(self.df[self.df["action"] == "move_prot"].index).reset_index(drop=True)
-        if len(judge_df) == 0:
+        """"""        
+        if len(self.df) == 0:
             display(md(f"No {level} protection records!"))
             return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
+        else:
+            judge_df = self.df.drop(self.df[self.df["action"] == "move_prot"].index).reset_index(drop=True)
+            if len(judge_df) == 0:
+                display(md(f"No {level} protection records!"))
+                return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         
         df_with_expiry = self.__get_expiry()
         self.test_expiry = df_with_expiry
