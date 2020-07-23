@@ -26,12 +26,15 @@ class ProtectListener():
         
     def get_protect(self, level="semi_edit"):
         """"""
-        if len(self.df) == 0:
+        judge_df = self.df.drop(self.df[self.df["action"] == "move_prot"].index).reset_index(drop=True)
+        if len(judge_df) == 0:
             display(md(f"No {level} protection records!"))
             return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         
         df_with_expiry = self.__get_expiry()
+        self.test_expiry = df_with_expiry
         df_with_unknown = self.__check_unknown(df_with_expiry)
+        self.test_unknown = df_with_unknown
         df_checked_unprotect = self.__check_unprotect(df_with_unknown)
         df_select_level = self.__select_level(df_checked_unprotect, level=level)
         df_with_unprotect = self.__get_unprotect(df_select_level)
@@ -219,7 +222,9 @@ class ProtectListener():
         mask_unknown_auto_move = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed_move"].isnull())
         mask_unknown_sys_edit = (protect_log["action"] != "unprotect") & (protect_log["sysop_edit"].isnull())
         mask_unknown_sys_move = (protect_log["action"] != "unprotect") & (protect_log["sysop_move"].isnull())
+        mask_extendedconfirmed = protect_log["params"].str.contains("extendedconfirmed").fillna(False)
         mask_unknown = (mask_unknown_auto_edit & mask_unknown_sys_edit & mask_unknown_auto_move & mask_unknown_sys_move)
+        mask_unknown = (mask_unknown | mask_extendedconfirmed)
         protect_log.loc[mask_unknown_auto_edit, "autoconfirmed_edit"] = 0
         protect_log.loc[mask_unknown_auto_move, "autoconfirmed_move"] = 0
         protect_log.loc[mask_unknown_sys_edit, "sysop_edit"] = 0
@@ -227,7 +232,7 @@ class ProtectListener():
         protect_log.loc[mask_unknown, "unknown"] = 1
         
         # Delete move action.
-        protect_log = protect_log.drop(protect_log[protect_log["action"] == "move_prot"].index).reset_index(drop=True)
+        #protect_log = protect_log.drop(protect_log[protect_log["action"] == "move_prot"].index).reset_index(drop=True)
         
         # Fill non-unknown with 0.
         protect_log["unknown"] = protect_log["unknown"].fillna(0)
