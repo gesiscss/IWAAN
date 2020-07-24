@@ -24,14 +24,21 @@ class ProtectListener():
             self.inf_str = "indefinite"
             self.exp_str = "expires"
         
-    def get_protect(self, level="semi"):
-        """"""
+    def get_protect(self, level="semi_edit"):
+        """"""        
         if len(self.df) == 0:
             display(md(f"No {level} protection records!"))
             return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
+        else:
+            judge_df = self.df.drop(self.df[self.df["action"] == "move_prot"].index).reset_index(drop=True)
+            if len(judge_df) == 0:
+                display(md(f"No {level} protection records!"))
+                return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         
         df_with_expiry = self.__get_expiry()
+        self.test_expiry = df_with_expiry
         df_with_unknown = self.__check_unknown(df_with_expiry)
+        self.test_unknown = df_with_unknown
         df_checked_unprotect = self.__check_unprotect(df_with_unknown)
         df_select_level = self.__select_level(df_checked_unprotect, level=level)
         df_with_unprotect = self.__get_unprotect(df_select_level)
@@ -54,7 +61,11 @@ class ProtectListener():
             reg0[0] = (reg0[0][0] + ":" + reg0[0][1], self.inf_str)
             return reg0
         else:
-            reg1[0] = (reg1[0], self.inf_str)
+            try:
+                reg1[0] = (reg1[0], self.inf_str)
+            except:
+                pass
+            
             return reg1
 
         
@@ -67,22 +78,32 @@ class ProtectListener():
         
         
     def __check_state(self, extract):
-        states_dict = {"autoconfirmed": 0, "expiry1": None,
-                      "sysop": 0, "expiry2": None}
+        states_dict = {"autoconfirmed_edit": 0, "expiry1": None,
+                  "autoconfirmed_move": 0, "expiry11": None,
+                  "sysop_edit": 0, "expiry2": None,
+                  "sysop_move": 0, "expiry21": None}
 
         len_extract = len(extract)
         for i in range(len_extract):
             action_tup = extract[i]
-            mask_auto = "autoconfirmed" in action_tup[0]
-            mask_sysop = "sysop" in action_tup[0]            
+            mask_auto_edit = "edit=autoconfirmed" in action_tup[0]
+            mask_auto_move = "move=autoconfirmed" in action_tup[0]
+            mask_sysop_edit = "edit=sysop" in action_tup[0]
+            mask_sysop_move = "move=sysop" in action_tup[0]
 
-            if mask_auto:
-                states_dict["autoconfirmed"] = int(mask_auto)
+            if mask_auto_edit:
+                states_dict["autoconfirmed_edit"] = int(mask_auto_edit)
                 states_dict["expiry1"] = self.__extract_date(action_tup[1])
+            if mask_auto_move:
+                states_dict["autoconfirmed_move"] = int(mask_auto_move)
+                states_dict["expiry11"] = self.__extract_date(action_tup[1])
 
-            if mask_sysop:
-                states_dict["sysop"] = int(mask_sysop)
+            if mask_sysop_edit:
+                states_dict["sysop_edit"] = int(mask_sysop_edit)
                 states_dict["expiry2"] = self.__extract_date(action_tup[1])
+            if mask_sysop_move:
+                states_dict["sysop_move"] = int(mask_sysop_move)
+                states_dict["expiry21"] = self.__extract_date(action_tup[1])
     
         return states_dict
     
@@ -105,6 +126,7 @@ class ProtectListener():
     def __get_expiry(self):
         """"""
         protect_log = (self.df).copy()
+        self.test_log = protect_log
         
         # Convert timestamp date format.
         protect_log["timestamp"] = protect_log["timestamp"].apply(lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ"))
@@ -134,7 +156,7 @@ class ProtectListener():
         
         # Fill expiry into the dataframe.
         for k, v in expiry.items():
-            protect_log.loc[k, "autoconfirmed"] = v["autoconfirmed"]
+            protect_log.loc[k, "autoconfirmed_edit"] = v["autoconfirmed_edit"]
 
             if v["expiry1"] != None:
                 try:
@@ -148,8 +170,23 @@ class ProtectListener():
                             protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %d. %b. %Y")
                         except:
                             protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%d. %B %Y, %H:%M Uhr")
+                            
+            protect_log.loc[k, "autoconfirmed_move"] = v["autoconfirmed_move"]
+                            
+            if v["expiry11"] != None:
+                try:
+                    protect_log.loc[k, "expiry11"] = datetime.strptime(v["expiry11"], "%H:%M, %d %B %Y")
+                except:
+                    try:
+                        protect_log.loc[k, "expiry11"] = datetime.strptime(v["expiry11"], "%H:%M, %B %d, %Y")
+                    except:
+                        v["expiry11"] = self.__month_lng(v["expiry11"])
+                        try:
+                            protect_log.loc[k, "expiry11"] = datetime.strptime(v["expiry11"], "%H:%M, %d. %b. %Y")
+                        except:
+                            protect_log.loc[k, "expiry11"] = datetime.strptime(v["expiry11"], "%d. %B %Y, %H:%M Uhr")
 
-            protect_log.loc[k, "sysop"] = v["sysop"]
+            protect_log.loc[k, "sysop_edit"] = v["sysop_edit"]
 
             if v["expiry2"] != None:
                 try:
@@ -163,6 +200,21 @@ class ProtectListener():
                             protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %d. %b. %Y")
                         except:
                             protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%d. %B %Y, %H:%M Uhr")
+                            
+            protect_log.loc[k, "sysop_move"] = v["sysop_move"]
+                            
+            if v["expiry21"] != None:
+                try:
+                    protect_log.loc[k, "expiry21"] = datetime.strptime(v["expiry21"], "%H:%M, %d %B %Y")
+                except:
+                    try:
+                        protect_log.loc[k, "expiry21"] = datetime.strptime(v["expiry21"], "%H:%M, %B %d, %Y")
+                    except:
+                        v["expiry21"] = self.__month_lng(v["expiry21"])
+                        try:
+                            protect_log.loc[k, "expiry21"] = datetime.strptime(v["expiry21"], "%H:%M, %d. %b. %Y")
+                        except:
+                            protect_log.loc[k, "expiry21"] = datetime.strptime(v["expiry21"], "%d. %B %Y, %H:%M Uhr")
                         
         
         return protect_log
@@ -170,15 +222,21 @@ class ProtectListener():
     
     def __check_unknown(self, protect_log):
         """"""
-        mask_unknown_auto = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed"].isnull())
-        mask_unknown_sys = (protect_log["action"] != "unprotect") & (protect_log["sysop"].isnull())
-        mask_unknown = (mask_unknown_auto & mask_unknown_sys)
-        protect_log.loc[mask_unknown_auto, "autoconfirmed"] = 0
-        protect_log.loc[mask_unknown_sys, "sysop"] = 0
+        mask_unknown_auto_edit = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed_edit"].isnull())
+        mask_unknown_auto_move = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed_move"].isnull())
+        mask_unknown_sys_edit = (protect_log["action"] != "unprotect") & (protect_log["sysop_edit"].isnull())
+        mask_unknown_sys_move = (protect_log["action"] != "unprotect") & (protect_log["sysop_move"].isnull())
+        mask_extendedconfirmed = protect_log["params"].str.contains("extendedconfirmed").fillna(False)
+        mask_unknown = (mask_unknown_auto_edit & mask_unknown_sys_edit & mask_unknown_auto_move & mask_unknown_sys_move)
+        mask_unknown = (mask_unknown | mask_extendedconfirmed)
+        protect_log.loc[mask_unknown_auto_edit, "autoconfirmed_edit"] = 0
+        protect_log.loc[mask_unknown_auto_move, "autoconfirmed_move"] = 0
+        protect_log.loc[mask_unknown_sys_edit, "sysop_edit"] = 0
+        protect_log.loc[mask_unknown_sys_move, "sysop_move"] = 0
         protect_log.loc[mask_unknown, "unknown"] = 1
         
         # Delete move action.
-        protect_log = protect_log.drop(protect_log[protect_log["action"] == "move_prot"].index).reset_index(drop=True)
+        #protect_log = protect_log.drop(protect_log[protect_log["action"] == "move_prot"].index).reset_index(drop=True)
         
         # Fill non-unknown with 0.
         protect_log["unknown"] = protect_log["unknown"].fillna(0)
@@ -206,7 +264,7 @@ class ProtectListener():
     def __check_unprotect(self, protect_log):
         """"""        
         idx_unprotect = protect_log[protect_log["action"] == "unprotect"].index
-        for col_name in ["autoconfirmed", "sysop", "unknown"]:
+        for col_name in ["autoconfirmed_edit", "autoconfirmed_move", "sysop_edit", "sysop_move", "unknown"]:
             for idx in reversed(idx_unprotect):
                 if protect_log[col_name].loc[idx + 1] == 1:
                     protect_log.loc[idx, col_name] = 1
@@ -233,33 +291,59 @@ class ProtectListener():
     
     
     def __select_level(self, protect_log, level):
-        """'fully', 'semi', 'unknown'"""
+        """'fully_edit', 'fully_move', 'semi_edit', 'semit_move', 'unknown'"""
         
-        protect_log[["autoconfirmed", "sysop"]] = protect_log[["autoconfirmed", "sysop"]].fillna(2)
-        protect_auto = protect_log[protect_log["autoconfirmed"] == 1]  # Semi-protected
-        protect_sys = protect_log[protect_log["sysop"] == 1]  # Fully-protected
-        protect_unknown = protect_log[protect_log["unknown"] == 1]  # Unknown 
+        protect_log[["autoconfirmed_edit",
+                 "autoconfirmed_move",
+                 "sysop_edit",
+                 "sysop_move"]] = protect_log[["autoconfirmed_edit","autoconfirmed_move", "sysop_edit", "sysop_move"]].fillna(2)
+        protect_auto_edit = protect_log[protect_log["autoconfirmed_edit"] == 1]  # Semi-protected (edit)
+        protect_auto_move = protect_log[protect_log["autoconfirmed_move"] == 1]  # Semi-protected (move)
+        protect_sys_edit = protect_log[protect_log["sysop_edit"] == 1]  # Fully-protected (edit)
+        protect_sys_move = protect_log[protect_log["sysop_move"] == 1]  # Fully-protected (move)
+        protect_unknown = protect_log[protect_log["unknown"] == 1]  # Unknown
+        self.test_auto_edit = protect_auto_edit
+        common_drop_cols = ["autoconfirmed_edit", "autoconfirmed_move", "sysop_edit", "sysop_move", "unknown"]
+        expiry_cols = ["expiry1", "expiry11", "expiry2", "expiry21"]
 
-        if level == "semi":
-            protect_table = protect_auto.copy()
+        if level == "semi_edit":
+            protect_table = protect_auto_edit.copy()
             if "expiry1" in protect_table.columns:
                 try:
-                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry2", "unknown"], 
-                                                       axis=1).rename({"expiry1": "expiry"}, axis=1)
+                    protect_table = protect_table.drop(common_drop_cols + ["expiry11", "expiry2", "expiry21"], axis=1).rename({"expiry1": "expiry"}, axis=1)
                 except KeyError:
-                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "unknown"], axis=1).rename({"expiry1": "expiry"}, axis=1)
+                    protect_table = protect_table.drop(common_drop_cols, axis=1).rename({"expiry1": "expiry"}, axis=1)
+            else:
+                protect_table["expiry"] = pd.NaT
+                
+        elif level == "semi_move":
+            protect_table = protect_auto_move.copy()
+            if "expiry11" in protect_table.columns:
+                try:
+                    protect_table = protect_table.drop(common_drop_cols + ["expiry1", "expiry2", "expiry21"], axis=1).rename({"expiry11": "expiry"}, axis=1)
+                except KeyError:
+                    protect_table = protect_table.drop(common_drop_cols, axis=1).rename({"expiry11": "expiry"}, axis=1)
+            else:
+                protect_table["expiry"] = pd.NaT
+                
+        elif level == "fully_edit":
+            protect_table = protect_sys_edit.copy()
+            if "expiry2" in protect_table.columns:
+                try:
+                    protect_table = protect_table.drop(common_drop_cols + ["expiry1", "expiry11", "expiry21"], axis=1).rename({"expiry2": "expiry"}, axis=1)
+                except KeyError:
+                    protect_table = protect_table.drop(common_drop_cols, axis=1).rename({"expiry2": "expiry"}, axis=1)
             else:
                 protect_table["expiry"] = pd.NaT
 
 
-        elif level == "fully":
-            protect_table = protect_sys.copy()
-            if "expiry2" in protect_table.columns:
+        elif level == "fully_move":
+            protect_table = protect_sys_move.copy()
+            if "expiry21" in protect_table.columns:
                 try:
-                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry1", "unknown"], 
-                                                       axis=1).rename({"expiry2": "expiry"}, axis=1)
+                    protect_table = protect_table.drop(common_drop_cols + ["expiry1", "expiry11", "expiry2"], axis=1).rename({"expiry21": "expiry"}, axis=1)
                 except KeyError:        
-                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "unknown"], axis=1).rename({"expiry2": "expiry"}, axis=1)
+                    protect_table = protect_table.drop(common_drop_cols, axis=1).rename({"expiry21": "expiry"}, axis=1)
             else:            
                 protect_table["expiry"] = pd.NaT
 
@@ -268,15 +352,20 @@ class ProtectListener():
             protect_table = protect_unknown.copy()
             protect_table["expiry"] = pd.NaT
             try:
-                protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry1", "expiry2", "unknown"], axis=1)
+                protect_table = protect_table.drop(common_drop_cols + expiry_cols, axis=1)
             except KeyError:
                 try:
-                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry1", "unknown"], axis=1)
+                    protect_table = protect_table.drop(common_drop_cols + ["expiry1"], axis=1)
                 except KeyError:
-                    protect_table = protect_table.drop(["autoconfirmed", "sysop", "expiry2", "unknown"], axis=1)
-                    
+                    try:
+                        protect_table = protect_table.drop(common_drop_cols + ["expiry11"], axis=1)                   
+                    except KeyError:
+                        try:
+                            protect_table = protect_table.drop(common_drop_cols + ["expiry2"], axis=1)
+                        except:
+                            protect_table = protect_table.drop(common_drop_cols + ["expiry21"], axis=1)
         else:
-            raise ValueError("Please choose one level from 'semi', 'fully' and 'unknown'.")
+            raise ValueError("Please choose one level from 'semi_edit', 'semi_move', 'fully_edit', 'fully_move' and 'unknown'.")
 
 
         protect_table = protect_table.reset_index(drop=True)
@@ -326,7 +415,11 @@ class ProtectListener():
     def __get_plot(self, final_table, level):
         """"""
         # Level's name
-        levels = {"semi": "Semi-protection", "fully": "Full-protection", "unknown": "Unknown protection"}
+        levels = {"semi_edit": "Semi-protection (edit)",
+              "semi_move": "Semi-protection (move)",
+              "fully_edit": "Full-protection (edit)",
+              "fully_move": "Full-protection (move)",
+              "unknown": "Other protection"}
 
         # For Gantt chart
         protect_plot = final_table[["type", "timestamp", "finish"]].rename({"type": "Task", "timestamp": "Start", "finish": "Finish"}, axis=1)
@@ -493,6 +586,7 @@ class TemplateListener():
     
     
     def listen(self):
+        display(md("Analysing templates data..."))
         #plot_revs = []        
         missing_revs = []
         df_templates = []
@@ -509,13 +603,15 @@ class TemplateListener():
         missing_revs = pd.concat(missing_revs).reset_index(drop=True).drop_duplicates()
         df_templates = pd.concat(df_templates).reset_index(drop=True).drop_duplicates()
         
+        clear_output()
+        
         # Capture missing values
-        if len(missing_revs) != 0:
-            display(md("Checking if there are missing templates..."))
-            missing_values = self.get_missing_tl(missing_revs)
-            df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
-            clear_output()
-            display(md(f"***Page: {self.page['title']} ({self.lng.upper()})***"))
+#         if len(missing_revs) != 0:
+#             display(md("Checking if there are missing templates..."))
+#             missing_values = self.get_missing_tl(missing_revs)
+#             df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
+#             clear_output()
+#             display(md(f"***Page: {self.page['title']} ({self.lng.upper()})***"))
             
                 
         # Create plot df for missing values
@@ -547,12 +643,15 @@ class TemplateListener():
         if self.lng == "en":
             templates_color = {"Featured Article": '#056ded', "Good Article": '#d9331c', "Disputed": '#ff0505',
                          "POV*": '#5cdb9a', "Systemic bias":'#02f77a', 
-                         "Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+                         "Semi-protection (edit)":'#262626', "Semi-protection (move)": "#939996",
+                         "Full-protection (edit)":'#262626', "Full-protection (move)":'#939996', "Other protection":'#939996'}
         elif self.lng == "de":
             templates_color = {"Exzellent": '#056ded', "Lesenswert": '#d9331c', "Neutralität": '#5cdb9a', 
-                         "Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+                         "Semi-protection (edit)":'#262626', "Semi-protection (move)": "#939996",
+                         "Full-protection (edit)":'#262626', "Full-protection (move)":'#939996', "Other protection":'#939996'}
         else:
-            templates_color = {"Semi-protection":'#939996', "Full-protection":'#939996', "Unknown protection":'#939996'}
+            templates_color = {"Semi-protection (edit)":'#262626', "Semi-protection (move)": "#939996",
+                         "Full-protection (edit)":'#262626', "Full-protection (move)":'#939996', "Other protection":'#939996'}
         
         if len(missing_revs) !=0:
             display(md("**Warning: there are perhaps missing records for template editing!**")) 
@@ -562,7 +661,7 @@ class TemplateListener():
             pass
         
         if len(self.plot) != 0:
-            display(md("The following revisions are captured:"))
+            display(md("The following templates are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
                 ff.create_gantt(plot_merge_task, colors=templates_color, 

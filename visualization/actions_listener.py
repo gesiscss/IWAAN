@@ -7,6 +7,8 @@ from ipywidgets.widgets import Output
 from metrics.token import TokensManager
 from .editors_listener import remove_stopwords
 
+from pandas.tseries.offsets import MonthEnd
+
 
 class ActionsListener():
 
@@ -219,9 +221,15 @@ class ActionsListener():
         if (granularity[0] == "D") or (granularity[0] == "W"):
             df = df.groupby(pd.Grouper(
                 key='rev_time', freq=granularity[0])).sum().reset_index()
+        elif granularity[0] == "M":
+            df = df.groupby(pd.Grouper(
+                key='rev_time', freq=granularity[0] + 'S')).sum().reset_index()
+            df["rev_time"] = df["rev_time"] + MonthEnd(1)
         else:
             df = df.groupby(pd.Grouper(
-                key='rev_time', freq=granularity[0]+'S')).sum().reset_index()
+                key='rev_time', freq=granularity[0] + 'S')).sum().reset_index()
+            df["rev_time"] = df["rev_time"] - pd.Timedelta(days=1)
+            
         
         fig = make_subplots(rows=2, cols=1, start_cell="bottom-left", shared_xaxes=True, vertical_spacing=0.05)
         
@@ -318,9 +326,15 @@ class ActionsListener():
         if (granularity[0] == "D") or (granularity[0] == "W"):
             df = df.groupby(pd.Grouper(
                 key='rev_time', freq=granularity[0])).sum().reset_index()
+            
+        elif granularity[0] == "M":
+            df = df.groupby(pd.Grouper(
+                key='rev_time', freq=granularity[0] + 'S')).sum().reset_index()
+            df["rev_time"] = df["rev_time"] + MonthEnd(1)
         else:
             df = df.groupby(pd.Grouper(
-                key='rev_time', freq=granularity[0]+'S')).sum().reset_index()
+                key='rev_time', freq=granularity[0] + 'S')).sum().reset_index()
+            df["rev_time"] = df["rev_time"] - pd.Timedelta(days=1)
 
         data = [
             graph_objs.Scatter(

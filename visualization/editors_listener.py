@@ -216,7 +216,9 @@ class EditorsListener:
             clear_output()
             self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
             self.search_widget.value = self.selected_rev
+            display(md("Loading comments..."))
             self.get_comments()
+            clear_output()
             if self.selected_rev not in self.rev_comments.keys():
                 self.rev_comments[self.selected_rev] = ''            
             display(md(f"**Comment for the revision {self.selected_rev}:** {self.rev_comments[self.selected_rev]}"))
@@ -229,10 +231,14 @@ class EditorsListener:
             editor_selected = self.qgrid_obj.get_selected_df().reset_index()["editor_id"].iloc[0]
             editor_name = self.qgrid_obj.get_selected_df().reset_index()["editor"].iloc[0]
             page_title = self.all_tokens["article_title"].unique()[0]
+            
+            display(md("Loading revisions info..."))
+            second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
+            clear_output()
+            
             display(md(f"Within **{self.current_freq}** timeframe, you have selected **{editor_name}** (id: {editor_selected})"))
             display(HTML(f"The revisions fall in <a href='https://{self.lng}.wikipedia.org/w/index.php?date-range-to={date_selected}&tagfilter=&title={page_title}&action=history' target='_blank'>{date_selected}</a>"))
-
-            second_df = self.revision_manager.get_main(date_selected, editor_selected, self.current_freq)
+            
             second_df.rename({"main_opponent": "main_op", "stopwords_ratio": "SW_ratio",
                              "productivity": "prod"}, axis=1, inplace=True)
             columns_set = {"rev_time": {"width": 165}, "rev_id": {"width": 85}, "adds": {"width": 50}, "dels": {"width": 50},
@@ -309,7 +315,9 @@ class RevisionsManager:
         df_ratios = self.get_ratios(filtered_df).reset_index()
         df_opponents = self.get_rev_conflict_reac(df_ratios)
         df_merge1 = df_ratios.merge(df_opponents, on="rev_id", how="left")
+        self.test_merge1 = df_merge1
         df_ores = self.get_ores(df_merge1)
+        self.test_ores = df_ores
         df_merge2 = df_merge1.merge(df_ores, on="rev_id", how="left").set_index("rev_time")
         
         return df_merge2
@@ -389,14 +397,23 @@ class RevisionsManager:
                 
         return rev_conflicts
     
-    
+    def __split_arr(self, arr, threshold=50):
+        return [arr[i: i + threshold] for i in range(0, len(arr), threshold)]
+        
     def get_ores(self, merge1):
         # Revsion list
         revs_list = merge1["rev_id"].values
         
         # Use ORESAPI
         ores_dv = ORESDV(ORESAPI(lng=self.lng))
-        ores_df = ores_dv.get_goodfaith_damage(revs_list)
+        if len(revs_list) > 50:
+            revs_container = []
+            for chunk in self.__split_arr(revs_list):
+                chunk_df = ores_dv.get_goodfaith_damage(chunk)
+                revs_container.append(chunk_df)
+            ores_df = pd.concat(revs_container).reset_index(drop=True)
+        else:
+            ores_df = ores_dv.get_goodfaith_damage(revs_list)
         
         return ores_df
     
