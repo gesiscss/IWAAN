@@ -1,6 +1,7 @@
 import calendar
 from datetime import date, timedelta
 import pandas as pd
+import numpy as np
 
 import qgrid
 
@@ -60,6 +61,28 @@ def mark_last_day(df):
     df["last_day_month"] = df["rev_time"].dt.date.apply(get_last_date_month)
     df["last_day_week"] = df["rev_time"].dt.date.apply(week_get_sunday)
     df["this_day"] = df["rev_time"].dt.date.apply(get_same_day)
+    
+def cal_scores(series, base=3600):
+    return np.log(base) / np.log(series.astype('timedelta64[s]') + 2)
+
+def fill_first_out(df):
+    mask_ori_rev = df["o_rev_id"].astype(str) == df["revision"]
+    mask_out = df["action"] == "out"
+    df_ori = df.loc[mask_ori_rev, :]
+    df_out = df.loc[mask_out, :]
+
+    idx_first_next = df_ori.index + 1
+    idx_out = df_out.index
+
+    idx_first_out = idx_first_next.intersection(idx_out)
+
+    df_first_two = df.loc[df_ori.index.union(idx_first_out), :]
+
+    timediff_first_out = (df_first_two["rev_time"] - df_first_two.shift(1)["rev_time"]).loc[idx_first_out]
+    scores_first_out = cal_scores(timediff_first_out)
+
+    df.loc[idx_first_out, "time_diff"] = timediff_first_out
+    df.loc[idx_first_out, "conflict"] = scores_first_out
     
 
 class EditorsListener:
@@ -123,8 +146,7 @@ class EditorsListener:
         retrieval_dict = dict(merge_tokens.groupby("mark")["rev_id"].apply(list))
 
         return retrieval_dict
-    
-    
+            
     def get_opponents(self, revs_list, tokens_df):
         # Filter out the tokens edited by this editor in those revs.
         mask_rev = tokens_df["revision"].isin(revs_list)
@@ -153,9 +175,13 @@ class EditorsListener:
         
         tokens_no_stopwords = remove_stopwords(self.all_tokens, self.lng)
         elegibles_no_stopwords = remove_stopwords(self.all_elegibles, self.lng)
-        actions = merged_tokens_and_elegibles(elegibles_no_stopwords, tokens_no_stopwords)
+        actions = merged_tokens_and_elegibles(elegibles_no_stopwords, tokens_no_stopwords)        
         mark_last_day(actions)
         
+        fill_first_out(actions)
+        
+        self.test_actions = actions
+        self.test_revs = all_revs
         opponent_info = self.get_opponents(all_revs, actions)
                         
         return opponent_info
@@ -366,16 +392,18 @@ class RevisionsManager:
         return to_display
     
     
-    def get_most_conflict_from_rev(self, rev_df):    
+    def get_most_conflict_from_rev(self, rev_df):
         sort_rev = rev_df.sort_values("conflict", ascending=False)
         min_react = str(sort_rev.iloc[0]["time_diff"])
         
         # Find most opponent
+        rev_id = rev_df["revision"].unique()[0]
         editor = rev_df["editor"].unique()[0]
         period = rev_df["rev_time"].astype("datetime64[ns]").dt.to_period('M').unique()[0]
         mask_date = self.opponents_info["edit_time"].astype("datetime64[ns]").dt.to_period('M') == period
         mask_editor = self.opponents_info["idx_editor"] == editor
         opponent_info = self.opponents_info[mask_date & mask_editor]
+        opponent_info = opponent_info[opponent_info["revision"] == rev_id]
         main_opponent_id = opponent_info.groupby(["editor"]).agg({"conflict": "sum"}).sort_values("conflict", ascending=False).iloc[0].name
         main_opponent = self.names_dict[main_opponent_id]
 
@@ -390,6 +418,7 @@ class RevisionsManager:
         actions_exc_stop = remove_stopwords(merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens), self.lng).reset_index(drop=True)
         mark_last_day(actions_exc_stop)
         
+        fill_first_out(actions_exc_stop)
         for idx, rev in enumerate(second_revs):
             some_rev = actions_exc_stop[actions_exc_stop["revision"] == rev]
             if len(some_rev) != 0:
