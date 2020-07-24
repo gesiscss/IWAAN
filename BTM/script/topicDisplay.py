@@ -43,7 +43,7 @@ def display_topics(model_dir, K, voca_pt, tokens_processed, lng, the_page):
         wvs = sorted(wvs, key=lambda d:d[1], reverse=True)
         #tmps = ' '.join(['%s' % voca[w] for w,v in wvs[:10]])
         tmps = ' '.join(['%s:%f' % (voca[w],v) for w,v in wvs[:10]])
-        topics_words.append([w for w,v in wvs[:40]])
+        topics_words.append([str(w) for w,v in wvs[:40]])
         rev = []
         for w,v in wvs[:10]:
             token_revs = tokens_processed.apply(lambda x: get_revision(x, w), axis=1).dropna().values
