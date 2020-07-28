@@ -515,6 +515,7 @@ class RankedEditorsListener:
 #             df_plot = self.df_to_plot(merge_df, editor)
             fig.add_trace(go.Scatter(x=df_plot["rev_time"], y=df_plot["total_surv_48h"], mode="lines+markers", name=editor))
         fig.update_layout(showlegend=True)
+        fig.update_yaxes(title_text="Total 48h-survival actions")
         fig.show()
         
 
