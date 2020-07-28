@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 
 import qgrid
+import plotly
+import plotly.graph_objects as go
+import plotly.express as px
 
 from IPython.display import display, clear_output, Markdown as md, HTML
 from ipywidgets import Output
@@ -446,6 +449,76 @@ class RevisionsManager:
         
         return ores_df
     
+
+class RankedEditorsListener:
+    
+    def __init__(self, agg):        
+        # Specify unregistered id.
+        surv_total = agg[["rev_time", "editor_str", "editor", "total_surv_48h"]]
+        new_editor = pd.DataFrame(np.where(surv_total["editor"] == "Unregistered", surv_total["editor_str"], surv_total["editor"]), columns=["editor"])
+        surv_total = pd.concat([surv_total[["rev_time", "total_surv_48h"]], new_editor], axis=1)
+        self.df = surv_total
+        
+    def df_to_plot(self, df, editor_name):
+        example_editor = df[df["editor"] == editor_name]
+        example_to_plot = df[["rev_time"]].merge(example_editor, how="left")
+        example_to_plot["editor"] = example_editor["editor"].unique()[0]
+        example_to_plot.fillna(0, inplace=True)
+
+        return example_to_plot
+        
+    def listen(self, _range1, _range2, granularity, top):
+        df_time = self.df[(self.df.rev_time.dt.date >= _range1) &
+                (self.df.rev_time.dt.date <= _range2)].reset_index(drop=True)
+        
+        mark_last_day(df_time)
+        # Granularity.
+        if granularity == "Daily":
+            df = df_time.groupby(["this_day", "editor"]).agg({"total_surv_48h": "sum"}).reset_index().rename({"this_day": "rev_time"}, axis=1)
+        elif granularity == "Weekly":
+            df = df_time.groupby(["last_day_week", "editor"]).agg({"total_surv_48h": "sum"}).reset_index()\
+                    .rename({"last_day_week": "rev_time"}, axis=1)
+        elif granularity == "Monthly":
+            df = df_time.groupby(["last_day_month", "editor"]).agg({"total_surv_48h": "sum"}).reset_index()\
+                    .rename({"last_day_month": "rev_time"}, axis=1)
+        else:
+            df = df_time
+        
+        # Get top editors list.
+        group_only_surv = df.groupby("editor")\
+                            .agg({"total_surv_48h": "sum"}).sort_values("total_surv_48h", ascending=False).reset_index()
+        editors_list_20 = list(group_only_surv.iloc[0:top,:]["editor"])
+        
+        # For displaying
+        group_to_display = group_only_surv.iloc[0:top,:].reset_index(drop=True)
+        group_to_display["rank"] = group_to_display.index + 1
+        group_to_display = group_to_display.rename({"editor": "editor", "total_surv_48h": "total 48h-survival actions"}, axis=1).set_index("rank")
+                
+        # Sort over time
+        group_surv = df.groupby(["rev_time", "editor"]).agg({"total_surv_48h": "sum"}).reset_index()
+        group_surv = group_surv.sort_values(["rev_time", "total_surv_48h"], ascending=(True, False))
+        
+        # Pick up top20 editors.
+        mask_inlist = group_surv["editor"].isin(editors_list_20)
+        group_surv_20 = group_surv.loc[mask_inlist]
+        merge_df = group_surv[["rev_time"]].merge(group_surv_20[["rev_time", "editor", "total_surv_48h"]], how="left").reset_index(drop=True)
+        self.test_merge = merge_df
+        
+        #Table
+        self.qgrid_obj = qgrid.show_grid(group_to_display, grid_options={"minVisibleRows": 2})
+        display(self.qgrid_obj)
+        
+        # Plot
+        fig = go.Figure()
+        for editor in editors_list_20:
+            df_plot = merge_df[merge_df["editor"] == editor].reset_index(drop=True)
+#             df_plot = self.df_to_plot(merge_df, editor)
+            fig.add_trace(go.Scatter(x=df_plot["rev_time"], y=df_plot["total_surv_48h"], mode="lines+markers", name=editor))
+        fig.update_layout(showlegend=True)
+        fig.show()
+        
+
+        
         
         
         
