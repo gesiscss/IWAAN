@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 
 import qgrid
+import plotly
+import plotly.graph_objects as go
+import plotly.express as px
 
 from IPython.display import display, clear_output, Markdown as md, HTML
 from ipywidgets import Output
@@ -446,6 +449,73 @@ class RevisionsManager:
         
         return ores_df
     
+
+class RankedEditorsListener:
+    
+    def __init__(self, agg):        
+        # Specify unregistered id.
+        surv_total = agg[["rev_time", "editor_str", "editor", "total_surv_48h"]]
+        new_editor = pd.DataFrame(np.where(surv_total["editor"] == "Unregistered", surv_total["editor_str"], surv_total["editor"]), columns=["editor"])
+        surv_total = pd.concat([surv_total[["rev_time", "total_surv_48h"]], new_editor], axis=1)
+        self.df = surv_total
+        
+    def listen(self, _range1, _range2, granularity, top):
+        df_time = self.df[(self.df.rev_time.dt.date >= _range1) &
+                (self.df.rev_time.dt.date <= _range2)].reset_index(drop=True)
+        
+        # Get top editors list.
+        group_only_surv = df_time.groupby("editor")\
+                            .agg({"total_surv_48h": "sum"}).sort_values("total_surv_48h", ascending=False).reset_index()
+        editors_top = list(group_only_surv.iloc[0:top,:]["editor"])
+        
+        # For displaying
+        group_to_display = group_only_surv.iloc[0:top,:].reset_index(drop=True)
+        group_to_display["rank"] = group_to_display.index + 1
+        group_to_display = group_to_display.rename({"editor": "editor", "total_surv_48h": "total 48h-survival actions"}, axis=1).set_index("rank")
+                
+        # Sort over time
+        group_surv = df_time.groupby(["rev_time", "editor"]).agg({"total_surv_48h": "sum"}).reset_index()
+        group_surv = group_surv.sort_values(["rev_time", "total_surv_48h"], ascending=(True, False))
+        
+        # Pick up top20 editors.
+        mask_inlist = group_surv["editor"].isin(editors_top)
+        group_surv_top = group_surv.loc[mask_inlist]
+        merge_df = group_surv[["rev_time"]].merge(group_surv_top[["rev_time", "editor", "total_surv_48h"]], how="left").reset_index(drop=True)
+        
+        #Table
+        self.qgrid_obj = qgrid.show_grid(group_to_display, grid_options={"minVisibleRows": 2})
+        display(self.qgrid_obj)
+            
+        # Generate pivot table
+        pivoted = merge_df.pivot(index="rev_time", columns="editor", values="total_surv_48h")
+        pivot_table = pd.DataFrame(pivoted.to_records())
+
+        if "nan" in pivot_table.columns:
+            pivot_table = pivot_table.drop("nan", axis=1).fillna(0)
+        else:
+            pivot_table = pivot_table.fillna(0)
+
+        cols = list(pivot_table.columns)
+        cols.remove("rev_time")
+        agg_dict = {editor: "sum" for editor in cols}
+        if granularity != "Timestamp (Revision)":
+            group_pivot = pivot_table.groupby(pd.Grouper(key="rev_time", freq=granularity[0])).agg(agg_dict).reset_index()
+        else:
+            group_pivot = pivot_table
+            
+        group_pivot = group_pivot[["rev_time"] + editors_top]
+        fig = go.Figure()
+        for editor in group_pivot.columns:
+            if editor == "rev_time":
+                pass
+            else:
+                fig.add_trace(go.Scatter(x=group_pivot["rev_time"], y=group_pivot[editor], mode="lines", name=editor))
+        fig.update_layout(showlegend=True)
+        fig.update_yaxes(title_text="Total 48h-survival actions")
+        fig.show()
+        
+
+        
         
         
         
