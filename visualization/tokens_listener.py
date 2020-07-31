@@ -8,6 +8,9 @@ from IPython.display import display, Markdown as md, clear_output, HTML
 from ipywidgets import Output, fixed
 from .wordclouder import WordClouder
 from .editors_listener import remove_stopwords
+from datetime import datetime, timedelta
+import plotly
+import plotly.graph_objects as go
 
 from metrics.token import TokensManager
 from metrics.conflict import ConflictManager
@@ -142,6 +145,73 @@ class TokensListener():
             
             
             
+class TokensOwnedListener():
+
+    def __init__(self, agg, sources, lng):
+        self.editors = agg[["editor_str", "editor"]].drop_duplicates().rename({"editor_str": "editor_id",
+                                                       "editor": "name"}, axis=1).reset_index(drop=True)
+        self.sources = sources
+        self.lng = lng
+        self.page_title = sources["tokens_all"]["article_title"].unique()[0]
+        
+        
+    def listen(self, revid, stopwords):
+        # Get source data through ConflictManager. 
+        if stopwords == 'Not included':
+            link_token = remove_stopwords(self.sources["tokens_all"], self.lng)
+            self.token_source = link_token
+            del link_token
+        else:
+            link_token = self.sources["tokens_all"]
+            self.token_source = link_token
+            del link_token
+        
+        self.token_source = self.token_source.reset_index(drop=True)
+        self.rev_id = revid
+        self.token_source['rev_time'] = pd.to_datetime(self.token_source['rev_time']).dt.tz_localize(None)
+        
+        if self.rev_id != None:
+            rev_tokens = self.token_source.loc[self.token_source['rev_id'] == int(self.rev_id), 'token_id'].values
+            tokens_df = self.token_source.loc[self.token_source['token_id'].isin(rev_tokens)].sort_values(['token_id', 'rev_time'], ascending=True)
+
+            #top_editors = tokens_df.groupby('o_editor').agg({'token_id':'count'}).sort_values('token_id', ascending=False).reset_index()
+            #top_editors = top_editors['o_editor'][:10]
+
+            days = tokens_df['rev_time'].dt.to_period('D').unique() #getting unique days 
+            today = pd.Period(datetime.today(), freq='D')
+            days = pd.Series(np.append(days, today)).sort_values(ascending=False) #adding today
+
+
+            if len(days) > 0:
+                days = days.dt.to_timestamp('D') + pd.DateOffset(1) #converting and adding one day for extracting previous dates from dataframe
+                summ = pd.DataFrame(columns=['o_editor', 'action', 'rev_time'])
+                _abs = []
+                df = tokens_df
+                for rev_time in days:
+                    df = df[df['rev_time'] <= rev_time]
+                    last_action = df.groupby('token_id').last() #last of group values for each token id
+                    surv = last_action[last_action['action'] != 'out'].groupby('o_editor')['action'].agg('count').reset_index()
+                    surv['rev_time'] = rev_time - pd.DateOffset(1)
+                    summ = summ.append(surv)
+
+
+                summ['editor_name'] = summ['o_editor'].apply(lambda x: self.editors.loc[self.editors['editor_id']==x, 'name'].unique()[0])
+
+
+            self.summ = summ
+            
+            #plot
+            data = []
+            for editor in self.summ['editor_name'].unique():
+                x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
+                y = self.summ.loc[self.summ['editor_name']==editor, 'action']
+                data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
+                
+            layout = go.Layout(hovermode='x', showlegend=True)
+            plotly.offline.init_notebook_mode(connected=True)
+            plotly.offline.iplot({"data": data, "layout": layout})
+
+
             
             
             
