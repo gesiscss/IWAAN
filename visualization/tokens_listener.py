@@ -172,14 +172,18 @@ class TokensOwnedListener():
         
         if self.rev_id != None:
             rev_tokens = self.token_source.loc[self.token_source['rev_id'] == int(self.rev_id), 'token_id'].values
-            tokens_df = self.token_source.loc[self.token_source['token_id'].isin(rev_tokens)].sort_values(['token_id', 'rev_time'], ascending=True)
+            if len(rev_tokens) > 0:
+                tokens_df = self.token_source.loc[self.token_source['token_id'].isin(rev_tokens)].sort_values(['token_id', 'rev_time'], ascending=True)
 
-            #top_editors = tokens_df.groupby('o_editor').agg({'token_id':'count'}).sort_values('token_id', ascending=False).reset_index()
-            #top_editors = top_editors['o_editor'][:10]
+                #top_editors = tokens_df.groupby('o_editor').agg({'token_id':'count'}).sort_values('token_id', ascending=False).reset_index()
+                #top_editors = top_editors['o_editor'][:10]
 
-            days = tokens_df['rev_time'].dt.to_period('D').unique() #getting unique days 
-            today = pd.Period(datetime.today(), freq='D')
-            days = pd.Series(np.append(days, today)).sort_values(ascending=False) #adding today
+                days = tokens_df['rev_time'].dt.to_period('D').unique() #getting unique days 
+                today = pd.Period(datetime.today(), freq='D')
+                days = pd.Series(np.append(days, today)).sort_values(ascending=False) #adding today
+            else:
+                print('The selected revision id does not appear in the history. Try a different one')
+                return False
 
 
             if len(days) > 0:
@@ -199,17 +203,20 @@ class TokensOwnedListener():
 
 
             self.summ = summ
+            if len(self.summ) > 0:
             
-            #plot
-            data = []
-            for editor in self.summ['editor_name'].unique():
-                x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
-                y = self.summ.loc[self.summ['editor_name']==editor, 'action']
-                data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
-                
-            layout = go.Layout(hovermode='x', showlegend=True)
-            plotly.offline.init_notebook_mode(connected=True)
-            plotly.offline.iplot({"data": data, "layout": layout})
+                #plot
+                data = []
+                for editor in self.summ['editor_name'].unique():
+                    x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
+                    y = self.summ.loc[self.summ['editor_name']==editor, 'action']
+                    data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
+
+                layout = go.Layout(hovermode='x', showlegend=True)
+                plotly.offline.init_notebook_mode(connected=True)
+                plotly.offline.iplot({"data": data, "layout": layout})
+            else:
+                print('No data to plot. Most probably tokens were unique and removed at the same day, therefore, no tokens were owned during the days of revisions.')
 
 
             
