@@ -154,8 +154,15 @@ class TokensOwnedListener():
         self.lng = lng
         self.page_title = sources["tokens_all"]["article_title"].unique()[0]
         
+    def get_editor_name(self, editor_id):
+        editor_name = self.editors.loc[self.editors['editor_id']==editor_id, 'name'].unique()
+        if len(editor_name) == 0 or 'Unregistered' in editor_name:
+            return editor_id
+        return editor_name[0]
         
-    def listen(self, revid, stopwords):
+        
+    def listen(self,_range1, _range2, stopwords, granularity):
+        
         # Get source data through ConflictManager. 
         if stopwords == 'Not included':
             link_token = remove_stopwords(self.sources["tokens_all"], self.lng)
@@ -167,56 +174,48 @@ class TokensOwnedListener():
             del link_token
         
         self.token_source = self.token_source.reset_index(drop=True)
-        self.rev_id = revid
-        self.token_source['rev_time'] = pd.to_datetime(self.token_source['rev_time']).dt.tz_localize(None)
+        if (len(str(_range1.year)) < 4) | (len(str(_range2.year)) < 4):
+            return display(md("Please enter the correct date!"))
+        if _range1 > _range2:
+            return display(md("Please enter the correct date!"))
+        else:
+            self.token_source = self.token_source[(self.token_source.rev_time.dt.date >= _range1) & (self.token_source.rev_time.dt.date <= _range2)]
         
-        if self.rev_id != None:
-            rev_tokens = self.token_source.loc[self.token_source['rev_id'] == int(self.rev_id), 'token_id'].values
-            if len(rev_tokens) > 0:
-                tokens_df = self.token_source.loc[self.token_source['token_id'].isin(rev_tokens)].sort_values(['token_id', 'rev_time'], ascending=True)
+        self.token_source['rev_time'] = pd.to_datetime(self.token_source['rev_time']).dt.tz_localize(None)
 
-                #top_editors = tokens_df.groupby('o_editor').agg({'token_id':'count'}).sort_values('token_id', ascending=False).reset_index()
-                #top_editors = top_editors['o_editor'][:10]
+        days = self.token_source['rev_time'].dt.to_period(granularity[0]).unique() #getting unique days 
+        today = pd.Period(datetime.today(), freq=granularity[0])
+        days = pd.Series(np.append(days, today)).sort_values(ascending=False) #adding today
 
-                days = tokens_df['rev_time'].dt.to_period('D').unique() #getting unique days 
-                today = pd.Period(datetime.today(), freq='D')
-                days = pd.Series(np.append(days, today)).sort_values(ascending=False) #adding today
-            else:
-                print('The selected revision id does not appear in the history. Try a different one')
-                return False
-
-
-            if len(days) > 0:
-                days = days.dt.to_timestamp('D') + pd.DateOffset(1) #converting and adding one day for extracting previous dates from dataframe
-                summ = pd.DataFrame(columns=['o_editor', 'action', 'rev_time'])
-                _abs = []
-                df = tokens_df
-                for rev_time in days:
-                    df = df[df['rev_time'] <= rev_time]
-                    last_action = df.groupby('token_id').last() #last of group values for each token id
-                    surv = last_action[last_action['action'] != 'out'].groupby('o_editor')['action'].agg('count').reset_index()
-                    surv['rev_time'] = rev_time - pd.DateOffset(1)
-                    summ = summ.append(surv)
+        if len(days) > 0:
+            days = days.dt.to_timestamp(granularity[0]) + pd.DateOffset(1) #converting and adding one day for extracting previous dates from dataframe
+            self.summ = pd.DataFrame(columns=['o_editor', 'action', 'rev_time'])
+            _abs = []
+            df = self.token_source
+            for rev_time in days:
+                df = df[df['rev_time'] <= rev_time]
+                last_action = df.groupby('token_id').last() #last of group values for each token id
+                surv = last_action[last_action['action'] != 'out'].groupby('o_editor')['action'].agg('count').reset_index()
+                surv['rev_time'] = rev_time - pd.DateOffset(1)
+                self.summ = self.summ.append(surv)
 
 
-                summ['editor_name'] = summ['o_editor'].apply(lambda x: self.editors.loc[self.editors['editor_id']==x, 'name'].unique()[0])
-
-
-            self.summ = summ
-            if len(self.summ) > 0:
+            self.summ['editor_name'] = self.summ['o_editor'].apply(self.get_editor_name)
             
-                #plot
-                data = []
-                for editor in self.summ['editor_name'].unique():
-                    x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
-                    y = self.summ.loc[self.summ['editor_name']==editor, 'action']
-                    data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
+            #getting top editors among the token owners over all time
+            top_editors = self.summ.groupby('editor_name')['action'].agg('sum').sort_values(ascending=False).reset_index()[:15]
+       
+            #plot
+            data = []
+            for editor in top_editors['editor_name']: 
+                x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
+                y = self.summ.loc[self.summ['editor_name']==editor, 'action']
+                data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
 
-                layout = go.Layout(hovermode='x', showlegend=True)
-                plotly.offline.init_notebook_mode(connected=True)
-                plotly.offline.iplot({"data": data, "layout": layout})
-            else:
-                print('No data to plot. Most probably tokens were unique and removed at the same day, therefore, no tokens were owned during the days of revisions.')
+            layout = go.Layout(hovermode='x unified', showlegend=True)
+            plotly.offline.init_notebook_mode(connected=True)
+            plotly.offline.iplot({"data": data, "layout": layout})
+
 
 
             
