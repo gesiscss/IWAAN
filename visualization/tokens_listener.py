@@ -204,10 +204,12 @@ class TokensOwnedListener():
             
             #getting top editors among the token owners over all time
             top_editors = self.summ.groupby('editor_name')['action'].agg('sum').sort_values(ascending=False).reset_index()[:15]
-       
+            first_date = self.summ.groupby('editor_name').last().reset_index() #first date of oadd for every editor
+            top_editors_merged = pd.merge(top_editors, first_date[['editor_name', 'rev_time']], on='editor_name').sort_values('rev_time') #adding first date for each editor and sorting by date of first oadd
+
             #plot
             data = []
-            for editor in top_editors['editor_name']: 
+            for editor in top_editors_merged['editor_name']: 
                 x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
                 y = self.summ.loc[self.summ['editor_name']==editor, 'action']
                 data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
