@@ -214,7 +214,11 @@ class TokensOwnedListener():
                 y = self.summ.loc[self.summ['editor_name']==editor, 'action']
                 data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
 
-            layout = go.Layout(hovermode='x unified', showlegend=True)
+            layout = go.Layout(hovermode='x unified', showlegend=True, margin=go.layout.Margin(l=50,
+                                                                  r=50,
+                                                                  b=150,
+                                                                  t=10,
+                                                                  pad=3))
             plotly.offline.init_notebook_mode(connected=True)
             plotly.offline.iplot({"data": data, "layout": layout})
 
