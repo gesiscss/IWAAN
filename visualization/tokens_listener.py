@@ -154,11 +154,15 @@ class TokensOwnedListener():
         self.lng = lng
         self.page_title = sources["tokens_all"]["article_title"].unique()[0]
         
-    def get_editor_name(self, editor_id):
-        editor_name = self.editors.loc[self.editors['editor_id']==editor_id, 'name'].unique()
-        if len(editor_name) == 0 or 'Unregistered' in editor_name:
-            return editor_id
-        return editor_name[0]
+    
+    
+    def get_editor_names(self):
+        #get editor names by editor id
+#         self.token_source = self.token_source.rename(columns={"editor":'editor_id'})
+        self.editors['o_editor'] = self.editors['editor_id'].astype(str)
+        self.token_source['o_editor'] = self.token_source['o_editor'].astype(str)
+        tokens_merged = self.editors[['o_editor', 'name']].merge(self.token_source, right_index=True, on='o_editor', how='outer')
+        self.token_source = tokens_merged[tokens_merged['token'].notnull()].copy()
         
         
     def listen(self,_range1, _range2, stopwords, granularity):
@@ -182,6 +186,7 @@ class TokensOwnedListener():
             self.token_source = self.token_source[(self.token_source.rev_time.dt.date >= _range1) & (self.token_source.rev_time.dt.date <= _range2)]
         
         self.token_source['rev_time'] = pd.to_datetime(self.token_source['rev_time']).dt.tz_localize(None)
+        self.get_editor_names()
 
         days = self.token_source['rev_time'].dt.to_period(granularity[0]).unique() #getting unique days 
         today = pd.Period(datetime.today(), freq=granularity[0])
@@ -189,29 +194,26 @@ class TokensOwnedListener():
 
         if len(days) > 0:
             days = days.dt.to_timestamp(granularity[0]) + pd.DateOffset(1) #converting and adding one day for extracting previous dates from dataframe
-            self.summ = pd.DataFrame(columns=['o_editor', 'action', 'rev_time'])
+            self.summ = pd.DataFrame(columns=['name', 'action', 'rev_time'])
             _abs = []
             df = self.token_source
             for rev_time in days:
                 df = df[df['rev_time'] <= rev_time]
                 last_action = df.groupby('token_id').last() #last of group values for each token id
-                surv = last_action[last_action['action'] != 'out'].groupby('o_editor')['action'].agg('count').reset_index()
+                surv = last_action[last_action['action'] != 'out'].groupby('name')['action'].agg('count').reset_index()
                 surv['rev_time'] = rev_time - pd.DateOffset(1)
                 self.summ = self.summ.append(surv)
 
-
-            self.summ['editor_name'] = self.summ['o_editor'].apply(self.get_editor_name)
-            
             #getting top editors among the token owners over all time
-            top_editors = self.summ.groupby('editor_name')['action'].agg('sum').sort_values(ascending=False).reset_index()[:15]
-            first_date = self.summ.groupby('editor_name').last().reset_index() #first date of oadd for every editor
-            top_editors_merged = pd.merge(top_editors, first_date[['editor_name', 'rev_time']], on='editor_name').sort_values('rev_time') #adding first date for each editor and sorting by date of first oadd
+            top_editors = self.summ.groupby('name')['action'].agg('sum').sort_values(ascending=False).reset_index()[:15]
+            first_date = self.summ.groupby('name').last().reset_index() #first date of oadd for every editor
+            top_editors_merged = pd.merge(top_editors, first_date[['name', 'rev_time']], on='name').sort_values('rev_time') #adding first date for each editor and sorting by date of first oadd
 
             #plot
             data = []
-            for editor in top_editors_merged['editor_name']: 
-                x = self.summ.loc[self.summ['editor_name']==editor, 'rev_time']
-                y = self.summ.loc[self.summ['editor_name']==editor, 'action']
+            for editor in top_editors_merged['name']: 
+                x = self.summ.loc[self.summ['name']==editor, 'rev_time']
+                y = self.summ.loc[self.summ['name']==editor, 'action']
                 data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
 
             layout = go.Layout(hovermode='x unified', showlegend=True, margin=go.layout.Margin(l=50,
