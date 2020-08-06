@@ -510,10 +510,12 @@ class RankedEditorsListener:
                 pass
             else:
                 fig.add_trace(go.Scatter(x=group_pivot["rev_time"], y=group_pivot[editor], mode="lines", name=editor))
-        fig.update_layout(showlegend=True)
+        fig.update_layout(showlegend=True, hovermode="x unified", margin=go.layout.Margin(l=50, r=50, b=195, t=10, pad=3))
         fig.update_yaxes(title_text="Total 48h-survival actions")
         fig.update_xaxes(title_text=f"{granularity}")
         fig.show()
+        
+        self.test_fig = fig
         
 
         
