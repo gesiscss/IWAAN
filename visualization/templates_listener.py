@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import plotly.figure_factory as ff
 import qgrid
 import re
+from tqdm import tqdm
 
 
 class ProtectListener():
@@ -514,12 +515,8 @@ class TemplateListener():
 
     
     def get_prev_rev(self, current_rev):
-        tokens_all = self.df.copy()
-        tokens_all = tokens_all.sort_values("rev_time").reset_index(drop=True)
-        token_rev_ids = tokens_all["rev_id"].unique()
-
-        loc_current_rev = np.where(token_rev_ids == current_rev)[0][0]
-        prev_rev = token_rev_ids[loc_current_rev - 1]
+        loc_current_rev = np.where(self.token_rev_ids == current_rev)[0][0]
+        prev_rev = self.token_rev_ids[loc_current_rev - 1]
 
         return prev_rev
     
@@ -544,11 +541,13 @@ class TemplateListener():
     def get_missing_tl(self, sus):
         # Find previous rev_id.
         sus_rev_id = sus["rev_id"].unique()
+        
+        self.token_rev_ids = self.df.sort_values("rev_time").reset_index(drop=True)["rev_id"].unique()
         prev_ids = {key: self.get_prev_rev(key) for key in sus_rev_id}
         
         # Retrieve revision changes in the form of html.
         diff_response = {}
-        for cur, prev in prev_ids.items():
+        for cur, prev in tqdm(prev_ids.items()):
             diff_response[cur] = self.api.get_talk_rev_diff(cur, prev)["*"]
         
         # Mark missing status.
@@ -606,12 +605,12 @@ class TemplateListener():
         clear_output()
         
         # Capture missing values
-#         if len(missing_revs) != 0:
-#             display(md("Checking if there are missing templates..."))
-#             missing_values = self.get_missing_tl(missing_revs)
-#             df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
-#             clear_output()
-#             display(md(f"***Page: {self.page['title']} ({self.lng.upper()})***"))
+        if len(missing_revs) != 0:
+            display(md("Checking if there are missing templates..."))
+            missing_values = self.get_missing_tl(missing_revs)
+            df_templates = pd.concat([missing_values, df_templates]).sort_values(["token", "rev_time"]).reset_index(drop=True)
+            clear_output()
+            display(md(f"***Page: {self.page['title']} ({self.lng.upper()})***"))
             
                 
         # Create plot df for missing values
