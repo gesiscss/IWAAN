@@ -31,8 +31,8 @@ class ProtectListener():
             display(md(f"No {level} protection records!"))
             return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         else:
-            judge_df = self.df.drop(self.df[self.df["action"] == "move_prot"].index).reset_index(drop=True)
-            if len(judge_df) == 0:
+            self.df = self.df.drop(self.df[self.df["action"] == "move_prot"].index).reset_index(drop=True)
+            if len(self.df) == 0:
                 display(md(f"No {level} protection records!"))
                 return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         
@@ -582,6 +582,23 @@ class TemplateListener():
 #         mask_to_delete = mask_not_last_row & mask_plus & mask_same_start
         
 #         return unfinish_plot.loc[~mask_to_delete].reset_index(drop=True)
+
+    def plot_org(self, plot_df):
+        mask_move = (plot_df["Task"] == "Semi-protection (move)") | (plot_df["Task"] == "Full-protection (move)")
+        mask_edit = (plot_df["Task"] == "Semi-protection (edit)") | (plot_df["Task"] == "Full-protection (edit)")
+        final_plot = plot_df.loc[(~mask_move) & (~mask_edit)]
+
+        for mask in (mask_move, mask_edit):
+            if mask.sum() != 0:
+                plot_slice = plot_df.loc[mask]
+                plot_slice = plot_slice.sort_values("Start", ascending=False)
+
+                time_diff = (plot_slice["Finish"] - plot_slice.shift(1)["Start"]).fillna(timedelta(-1,0,0))
+                mask_adjusted = time_diff > timedelta(0,0,0)
+                plot_slice.loc[mask_adjusted, "Finish"] = plot_slice.shift(1).loc[mask_adjusted, "Start"]
+                final_plot = pd.concat([final_plot, plot_slice], axis=0)
+                
+        return final_plot
     
     
     def listen(self):
@@ -635,8 +652,11 @@ class TemplateListener():
             plot_merge_task["Task"] = plot_merge_task["Task"].replace(["POV", "PoV", "Pov", "Npov", "NPOV", 
                                                    "Neutrality", "Neutral", "Point Of View"], "POV*")
         plot_merge_task["Resource"] = plot_merge_task["Task"]
-                
-        self.plot = plot_merge_task
+        
+        
+        self.plot = self.plot_org(plot_merge_task)
+        
+        
         
         # Color.
         if self.lng == "en":
@@ -663,7 +683,7 @@ class TemplateListener():
             display(md("The following templates are captured:"))
             display(qgrid.show_grid(df_templates))
             display(
-                ff.create_gantt(plot_merge_task, colors=templates_color, 
+                ff.create_gantt(self.plot, colors=templates_color, 
                            showgrid_x=True, showgrid_y=True, bar_width=0.1, group_tasks=True, 
                            index_col='Resource', show_colorbar=False))
             if "POV*" in self.plot["Task"].unique():
