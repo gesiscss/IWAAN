@@ -191,6 +191,7 @@ class EditorsListener:
     
     
     def sort_scores(self, oppo_info, col):
+        oppo_info = oppo_info[oppo_info["editor"] != oppo_info["idx_editor"]]
         group_df = oppo_info.groupby(["idx_editor",
                              "editor",
                              col]).agg({"conflict": "sum"}).reset_index().rename({col: "bench_date"}, axis=1)
@@ -202,6 +203,7 @@ class EditorsListener:
         return df_display
     
     def avg_reac(self, oppo_info, col):
+        oppo_info = oppo_info[oppo_info["editor"] != oppo_info["idx_editor"]]
         avg_reac_display = oppo_info.groupby(["idx_editor", 
                     col])["time_diff"].agg(lambda x: str(x.mean()).split('.')[0]).reset_index().rename({col: "rev_time",                                           "time_diff":"avg_reac_time", "idx_editor":"editor_id"},axis=1).sort_values("rev_time").reset_index(drop=True)
         
@@ -343,6 +345,7 @@ class RevisionsManager:
         filtered_df = self.get_filtered_df(agg, selected_date, selected_editor, freq).reset_index(drop=True)
         df_ratios = self.get_ratios(filtered_df).reset_index()
         df_opponents = self.get_rev_conflict_reac(df_ratios)
+        self.test_df_opponents = df_opponents
         df_merge1 = df_ratios.merge(df_opponents, on="rev_id", how="left")
         self.test_merge1 = df_merge1
         df_ores = self.get_ores(df_merge1)
@@ -414,8 +417,9 @@ class RevisionsManager:
     
     
     def get_rev_conflict_reac(self, df_agg):
-        df_agg = df_agg.loc[~(df_agg["conflict"] == 0)]
+        #df_agg = df_agg.loc[~(df_agg["conflict"] == 0)]
         second_revs = df_agg["rev_id"].values
+        self.test_second_revs = second_revs
 
         rev_conflicts = pd.DataFrame(columns=["rev_id", "main_opponent", "min_react"])
         actions_exc_stop = remove_stopwords(merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens), self.lng).reset_index(drop=True)
@@ -424,7 +428,9 @@ class RevisionsManager:
         fill_first_out(actions_exc_stop)
         for idx, rev in enumerate(second_revs):
             some_rev = actions_exc_stop[actions_exc_stop["revision"] == rev]
+            some_rev = some_rev.dropna(subset=["conflict"])
             if len(some_rev) != 0:
+                self.problem_rev = some_rev
                 rev_conflicts.loc[idx] = [rev] + list(self.get_most_conflict_from_rev(some_rev))
                 
         return rev_conflicts
