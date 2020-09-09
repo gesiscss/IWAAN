@@ -98,13 +98,13 @@ def fill_first_out(df):
 
 class EditorsListener:
     """
-    Listener to display the tables in A2.1 of NB2, where several editor based metrics under different
+    Listener to display the tables in A2.1 of NB2, where several editor-based metrics under different
     time frames are presented.
     ...
     Attributes:
     -----------
     df (pd.DataFrame): global variable agg_actions, i.e. the dataframe storing actions, conflicts, stopwords
-                etc. statistc of each revision.
+                etc. of each revision.
     all_elegibles (pd.DataFrame): elegibles actions (including stopwords) from ConflictManager.
     all_tokens (pd.DataFrame): actions occurring on all tokens, including stopwords, from ConflictManager.
     names_id (dict): correspondence between editor's name and id.
@@ -146,15 +146,15 @@ class EditorsListener:
         """
         Run this method before creating listener.
         """
-        monthly_dict = self.__get_monthly_summary(remove_stopwords(self.all_tokens, self.lng))
+        monthly_dict = self._get_monthly_summary(remove_stopwords(self.all_tokens, self.lng))
         print("Calculating...")
-        opponent_info = self.__calculate(monthly_dict)
+        opponent_info = self._calculate(monthly_dict)
         self.revision_manager.opponents_info = opponent_info
-        self.__sort_by_granularity(opponent_info)
+        self._sort_by_granularity(opponent_info)
         
         clear_output()
         
-    def __get_monthly_summary(self, tokens_source):
+    def _get_monthly_summary(self, tokens_source):
         """
         Who created which revisions in each month.
         ...
@@ -177,7 +177,7 @@ class EditorsListener:
 
         return retrieval_dict
             
-    def __get_opponents(self, revs_list, tokens_df):
+    def _get_opponents(self, revs_list, tokens_df):
         """
         See calculate()
         ...
@@ -210,7 +210,7 @@ class EditorsListener:
 
         return final    
     
-    def __calculate(self, monthly_tokens):
+    def _calculate(self, monthly_tokens):
         """
         Given revision list of each editor grouped in each month, get the detailed
         opponent information of each token. Core method: get_opponents()
@@ -249,12 +249,12 @@ class EditorsListener:
         fill_first_out(actions)
         
         # Get final opponents info through get_opponents() method.
-        opponent_info = self.__get_opponents(all_revs, actions)
+        opponent_info = self._get_opponents(all_revs, actions)
                         
         return opponent_info
     
-    def __sort_scores(self, oppo_info, col):
-        ""
+    def _sort_scores(self, oppo_info, col):
+        "Aggregate conflict scores."
         # If the opponent is editor himself, then exclude it.
         oppo_info = oppo_info[oppo_info["editor"] != oppo_info["idx_editor"]]
         
@@ -271,7 +271,7 @@ class EditorsListener:
         
         return df_display
     
-    def __avg_reac(self, oppo_info, col):
+    def _avg_reac(self, oppo_info, col):
         "Calculate average response reaction time."
         # If the opponent is editor himself, then exclude it.
         oppo_info = oppo_info[oppo_info["editor"] != oppo_info["idx_editor"]]
@@ -282,7 +282,7 @@ class EditorsListener:
         
         return avg_reac_display
                
-    def __sort_by_granularity(self, oppo_info):
+    def _sort_by_granularity(self, oppo_info):
         """
         Sort the opponents info by month/week/day and calcalute average reaction time
         for each time frame.
@@ -297,20 +297,20 @@ class EditorsListener:
                         each time frame.
         """
         # Aggregate conflict scores.
-        month_opponent = self.__sort_scores(oppo_info, "last_day_month")
-        week_opponent = self.__sort_scores(oppo_info, "last_day_week")
-        daily_opponent = self.__sort_scores(oppo_info, "this_day")
+        month_opponent = self._sort_scores(oppo_info, "last_day_month")
+        week_opponent = self._sort_scores(oppo_info, "last_day_week")
+        daily_opponent = self._sort_scores(oppo_info, "this_day")
         
         # Average response reaction time.
-        month_avg_rec = self.__avg_reac(oppo_info, "last_day_month")
-        week_avg_rec = self.__avg_reac(oppo_info, "last_day_week")
-        daily_avg_rec = self.__avg_reac(oppo_info, "this_day")
+        month_avg_rec = self._avg_reac(oppo_info, "last_day_month")
+        week_avg_rec = self._avg_reac(oppo_info, "last_day_week")
+        daily_avg_rec = self._avg_reac(oppo_info, "this_day")
 
         self.gran_dict = {"Monthly": [month_opponent, month_avg_rec],
                  "Weekly": [week_opponent, week_avg_rec],
                  "Daily": [daily_opponent, daily_avg_rec]}
         
-    def __get_ratios(self, df_with_tf, freq):
+    def _get_ratios(self, df_with_tf, freq):
         """Used in the listener. Get productivity and stopwords_ratio.
         ...
         Parameters:
@@ -336,7 +336,7 @@ class EditorsListener:
         
         return df_ratios
       
-    def __merge_main(self, df_to_merge, freq):
+    def _merge_main(self, df_to_merge, freq):
         """
         Used in the listener.
         """
@@ -360,6 +360,7 @@ class EditorsListener:
     
     
     def on_select_revision(self, change):
+        "Second click and display comment."
         with self.out2:
             clear_output()
             self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
@@ -373,6 +374,7 @@ class EditorsListener:
             display(HTML(f"<a href='https://{self.lng}.wikipedia.org/w/index.php?diff={self.selected_rev}&title=TITLEDOESNTMATTER&diffmode=source' target='_blank'>Cilck here to check revisions differences</a>"))
     
     def on_select_change(self, change):
+        "First click."
         with self.out:
             clear_output()
             date_selected = self.qgrid_obj.get_selected_df().reset_index()["rev_time"].iloc[0]
@@ -405,16 +407,16 @@ class EditorsListener:
         
         
     def listen(self, _range1, _range2, granularity):
+        "Listener."
         if (len(str(_range1.year)) < 4) | (len(str(_range2.year)) < 4):
             return display(md("Please enter the correct date!"))
         if _range1 > _range2:
             return display(md("Please enter the correct date!"))
         else:
             df = self.df[(self.df.rev_time.dt.date >= _range1) & (self.df.rev_time.dt.date <= _range2)]
-        df_from_agg = self.__get_ratios(df, freq=granularity)
+        df_from_agg = self._get_ratios(df, freq=granularity)
         df_from_agg = df_from_agg.rename({"editor_str": "editor_id"}, axis=1)
-        self.test_df_agg = df_from_agg
-        df_display = self.__merge_main(df_from_agg, freq=granularity)
+        df_display = self._merge_main(df_from_agg, freq=granularity)
         df_display["conflict"] = (df_display["conflict"] / df_display["elegibles"]).fillna(0)
         
         df_display["main_opponent"] = df_display["main_opponent"].replace(self.names_id)
@@ -445,6 +447,19 @@ class EditorsListener:
         
         
 class RevisionsManager:
+    """
+    Called in EditorsListener. Calculate several metrics related to the revisions related to a 
+    selected editor
+    ...
+    Attributes:
+    -----------
+    agg_actions (pd.DataFrame): global variable agg_actions, i.e. the dataframe storing actions, conflicts, stopwords
+                etc. of each revision.
+    all_elegibles (pd.DataFrame): elegibles actions (including stopwords) from ConflictManager.
+    all_tokens (pd.DataFrame): actions occurring on all tokens, including stopwords, from ConflictManager.
+    opponents_info (pd.DataFrame): Opponents information derived from EditorsListener.__calculate().
+    lng (str): langauge from {'en', 'de'}
+    """
     
     def __init__(self, agg, all_elegibles, all_tokens, opponents_info, lng):
         self.agg_actions = agg
@@ -458,23 +473,45 @@ class RevisionsManager:
         
         
     def get_main(self, selected_date, selected_editor, freq):
-        agg = self.add_revision_id()
-        filtered_df = self.get_filtered_df(agg, selected_date, selected_editor, freq).reset_index(drop=True)
-        df_ratios = self.get_ratios(filtered_df).reset_index()
-        df_opponents = self.get_rev_conflict_reac(df_ratios)
-        self.test_df_opponents = df_opponents
+        """
+        Called in EditorsListener.on_select_change(). Merge several tables with different metrics.
+        ...
+        Parameters:
+        -----------
+        selected_date (datetime.date): Selected date.
+        selected_editor (str): editor id
+        freq (str): {"Monthly", "Weekly", "Daily"}
+        ...
+        Returns:
+        --------
+        df_merge2 (pd.DataFrame): the second table in A2.1.
+        """
+        agg = self._add_revision_id()
+        filtered_df = self._get_filtered_df(agg, selected_date, selected_editor, freq).reset_index(drop=True)
+        df_ratios = self._get_ratios(filtered_df).reset_index()
+        df_opponents = self._get_rev_conflict_reac(df_ratios)
         df_merge1 = df_ratios.merge(df_opponents, on="rev_id", how="left")
-        self.test_merge1 = df_merge1
-        df_ores = self.get_ores(df_merge1)
-        self.test_ores = df_ores
+        df_ores = self._get_ores(df_merge1)
         df_merge2 = df_merge1.merge(df_ores, on="rev_id", how="left").set_index("rev_time")
         
         return df_merge2
 
-    def add_revision_id(self):
+    def _add_revision_id(self):
+        """
+        Add revision id to aggregation dataframe.
+        ...
+        Returns:
+        --------
+        agg_with_revs (pd.DataFrame): agg_actions with an additional revision id column.
+        """
+        # Drop duplicated revisions
         no_dup_actions = merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens, drop=True)
+        
+        # Only take rev_time and revision columns.
         no_dup_actions["rev_time"] = no_dup_actions["rev_time"].astype("datetime64[ns]")
         revs_to_merged = no_dup_actions[["rev_time", "revision"]]
+        
+        # Merge aggregation table and revision time/id table.
         agg_with_revs = self.agg_actions.merge(revs_to_merged, on="rev_time", how="left")
         agg_with_revs.insert(1, "rev_id", agg_with_revs["revision"])
         agg_with_revs = agg_with_revs.drop("revision", axis=1).sort_values("rev_time").reset_index(drop=True)
@@ -482,15 +519,32 @@ class RevisionsManager:
         return agg_with_revs
     
     
-    def get_filtered_df(self, df, input_date, editor, freq):
+    def _get_filtered_df(self, df, input_date, editor, freq):
+        """
+        Filter the aggregation dataframe using input year/month, editor
+        and granularity.
+        ...
+        Parameters:
+        -----------
+        df (pd.DataFrame): aggregation dataframe with revision ids.
+        input_date (datetime.date): rev_time in selected row
+        ...
+        Returns:
+        -----------
+        filtered_df (pd.DataFrame): revisions with some agg metrics
+                        in a particular time frame.
+        """
+        # Decompose inputs
         years = df["rev_time"].dt.year
         months = df["rev_time"].dt.month
         days = df["rev_time"].dt.day
-
+        
+        # Create some masks.
         mask_year = years == input_date.year
         mask_month = months == input_date.month
         mask_editor = df["editor_str"] == editor
-
+        
+        # Filter by granularities.
         if freq == "Monthly":
             filtered_df = df.loc[mask_year & mask_month & mask_editor]
         elif freq == "Weekly":
@@ -504,7 +558,19 @@ class RevisionsManager:
         return filtered_df
     
     
-    def get_ratios(self, filtered_agg):    
+    def _get_ratios(self, filtered_agg):
+        """
+        Calculate ratios like productivity, stopwords ratio. Also standardize conflict score
+        using elegible actions.
+        ...
+        Parameters:
+        -----------
+        filtered_agg (pd.DataFrame): output of get_filtered_df() method.
+        ...
+        Returns:
+        -----------
+        to_display (pd.DataFrame): dataframe with addtional several ratio columns.
+        """
         filtered_agg["productivity"] = filtered_agg["total_surv_48h"] / filtered_agg["total"]
         filtered_agg["stopwords_ratio"] = filtered_agg["total_stopword_count"] / filtered_agg["total"]
         filtered_agg["conflict"] = filtered_agg["conflict"] / filtered_agg["elegibles"]
@@ -515,11 +581,25 @@ class RevisionsManager:
         return to_display
     
     
-    def get_most_conflict_from_rev(self, rev_df):
+    def _get_most_conflict_from_rev(self, rev_df):
+        """
+        Called in get_rev_conflict_reac() method.
+        Analyse the main opponent and min reaction time for each revision.
+        ...
+        Parameters:
+        -----------
+        rev_df (pd.DataFrame): actions without stopwords of a particular revision.
+        ...
+        Returns:
+        -----------
+        main_opponent (str): main opponent's name.
+        min_react (str): minimum reaction time.
+        """
+        # Sort conflict score in desc order and find the fastest response.
         sort_rev = rev_df.sort_values("conflict", ascending=False)
         min_react = str(sort_rev.iloc[0]["time_diff"])
         
-        # Find most opponent
+        # Find the main opponent.
         rev_id = rev_df["revision"].unique()[0]
         editor = rev_df["editor"].unique()[0]
         period = rev_df["rev_time"].astype("datetime64[ns]").dt.to_period('M').unique()[0]
@@ -533,37 +613,65 @@ class RevisionsManager:
         return main_opponent, min_react
     
     
-    def get_rev_conflict_reac(self, df_agg):
+    def _get_rev_conflict_reac(self, df_agg):
+        """
+        Get main opponent and minium reaction time of each given revision.
+        ...
+        Parameters:
+        -----------
+        df_agg (pd.DataFrame): output of get_ratios() method.
+        ...
+        Returns:
+        -----------
+        rev_conflicts (pd.DataFrame): dataframe with main opponent and min reaction time
+        """
+        # Revisions array.
         #df_agg = df_agg.loc[~(df_agg["conflict"] == 0)]
         second_revs = df_agg["rev_id"].values
-        self.test_second_revs = second_revs
-
+        
+        # Only consider non-stopwords.
         rev_conflicts = pd.DataFrame(columns=["rev_id", "main_opponent", "min_react"])
         actions_exc_stop = remove_stopwords(merged_tokens_and_elegibles(self.all_elegibles, self.all_tokens), self.lng).reset_index(drop=True)
+        
+        # Mark the last day of each time frame.
         mark_last_day(actions_exc_stop)
         
+        # Also consider the first deletion (that is not considered in elegible actions).
         fill_first_out(actions_exc_stop)
+        
+        # For each revision analyse the main opponent using get_most_conflict_from_rev method.
         for idx, rev in enumerate(second_revs):
             some_rev = actions_exc_stop[actions_exc_stop["revision"] == rev]
             some_rev = some_rev.dropna(subset=["conflict"])
             if len(some_rev) != 0:
                 self.problem_rev = some_rev
-                rev_conflicts.loc[idx] = [rev] + list(self.get_most_conflict_from_rev(some_rev))
+                rev_conflicts.loc[idx] = [rev] + list(self._get_most_conflict_from_rev(some_rev))
                 
         return rev_conflicts
     
-    def __split_arr(self, arr, threshold=50):
+    def _split_arr(self, arr, threshold=50):
         return [arr[i: i + threshold] for i in range(0, len(arr), threshold)]
         
-    def get_ores(self, merge1):
+    def _get_ores(self, merge1):
+        """
+        Get Goodfaith and Damaging scores from ORES API.
+        ...
+        Parameters:
+        -----------
+        merge1 (pd.DataFrame): df_merge1 in get_main() method.
+        ...
+        Returns:
+        -----------
+        ores_df (pd.DataFrame): df storing scores.
+        """
         # Revsion list
         revs_list = merge1["rev_id"].values
         
-        # Use ORESAPI
+        # Use ORES API
         ores_dv = ORESDV(ORESAPI(lng=self.lng))
         if len(revs_list) > 50:
             revs_container = []
-            for chunk in self.__split_arr(revs_list):
+            for chunk in self._split_arr(revs_list):
                 chunk_df = ores_dv.get_goodfaith_damage(chunk)
                 revs_container.append(chunk_df)
             ores_df = pd.concat(revs_container).reset_index(drop=True)

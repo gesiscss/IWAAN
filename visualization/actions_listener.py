@@ -81,11 +81,6 @@ class ActionsListener():
         merge_inc = self.actions_agg(actions_all_dict)
         merge_noinc = self.actions_agg(actions_dict)
         
-        self.test_actions_all = actions_all_dict
-        self.test_actions = actions_dict
-        self.test_merge_inc = merge_inc
-        self.test_merge_noinc = merge_noinc
-        
         comp_cols = ["rev_time", "adds", "dels", "reins"]
         inc_and_noinc = merge_inc[comp_cols].merge(merge_noinc[comp_cols], on="rev_time", how="outer").fillna(0)
 
@@ -193,9 +188,10 @@ class ActionsListener():
         stop_words = open(stopwords_fn, 'r').read().split()
         
         if type(actions) == dict:
+            new_actions = {}
             for key, value in actions.items():
-                actions[key] = value[~value['token'].isin(stop_words)]
-            return actions
+                new_actions[key] = value[~value['token'].isin(stop_words)]
+            return new_actions
         else:
             return actions[~actions['token'].isin(stop_words)]
     
