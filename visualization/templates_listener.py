@@ -11,6 +11,16 @@ from tqdm import tqdm
 class ProtectListener():
     
     def __init__(self, pp_log, lng):
+        """
+        Class to analyse protection information.
+        ...
+        Attributes:
+        -----------
+        df (pd.DataFrame): raw data extracted from Wikipedia API.
+        lng (str): langauge from {'en', 'de'}
+        inf_str / exp_str (str): "indefinite" / "expires" for English
+                        "unbeschränkt" / "bis" for Deutsch
+        """
         self.lng = lng
         self.df = pp_log
         
@@ -26,7 +36,18 @@ class ProtectListener():
             self.exp_str = "expires"
         
     def get_protect(self, level="semi_edit"):
-        """"""        
+        """
+        Main function of ProtectListener.
+        ...
+        Parameters: 
+        -----------
+        level (str): select one from {"semi_edit", "semi_move", "fully_edit", "fully_move", "unknown"}
+        ...
+        Returns:
+        -----------
+        final_table (pd.DataFrame): detailed dataframe containing protection records for a particular type/level.
+        plot_table (pd.DataFrame): dataframe for further Gantt Chart plotting.
+        """        
         if len(self.df) == 0:
             display(md(f"No {level} protection records!"))
             return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
@@ -36,26 +57,37 @@ class ProtectListener():
                 display(md(f"No {level} protection records!"))
                 return None, pd.DataFrame(columns=["Task", "Start", "Finish", "Resource"])
         
-        df_with_expiry = self.__get_expiry()
-        self.test_expiry = df_with_expiry
-        df_with_unknown = self.__check_unknown(df_with_expiry)
-        self.test_unknown = df_with_unknown
-        df_checked_unprotect = self.__check_unprotect(df_with_unknown)
-        df_select_level = self.__select_level(df_checked_unprotect, level=level)
-        df_with_unprotect = self.__get_unprotect(df_select_level)
+        df_with_expiry = self._get_expiry()
+        df_with_unknown = self._check_unknown(df_with_expiry)
+        df_checked_unprotect = self._check_unprotect(df_with_unknown)
+        df_select_level = self._select_level(df_checked_unprotect, level=level)
+        df_with_unprotect = self._get_unprotect(df_select_level)
         
-        final_table = self.__get_final(df_with_unprotect)
-        plot_table = self.__get_plot(final_table, level=level)
+        final_table = self._get_final(df_with_unprotect)
+        plot_table = self._get_plot(final_table, level=level)
                 
         return final_table, plot_table
         
         
-    def __regrex1(self, captured_content):
+    def _regrex1(self, captured_content):
+        """Called in _get_expiry() method. Capture expriry date.
+        ...
+        Parameters:
+        -----------
+        captured_content (str): contents in "params" or "comment" column
+                    including "autoconfirmed" or "sysop".
+        ...
+        Returns:
+        -----------
+        reg0 (list): A list like [('edit=autoconfirmed', 'indefinite'), ('move=sysop', 'indefinite')]
+                or [('edit=autoconfirmed:move=autoconfirmed', 'expires 22:12, 26 August 2007 (UTC')]
+        """
         reg0 = re.findall('\[(.*?)\]\ \((.*?)\)', captured_content)
         return reg0
 
     
-    def __regrex2(self, captured_content):
+    def _regrex2(self, captured_content):
+        "Called in _get_expiry() method. Capture expriry date. Parameters and returns similar as _regrex1."
         reg0 = re.findall('\[(.*?)\:(.*?)\]$', captured_content)
         reg1 = re.findall('\[(.*?)\]$', captured_content)
         if len(reg0) != 0:
@@ -70,7 +102,10 @@ class ProtectListener():
             return reg1
 
         
-    def __extract_date(self, date_content):
+    def _extract_date(self, date_content):
+        """Called in _check_state(). Extract expiry date.
+        If inf, then return max Timestamp of pandas.
+        """
         if not self.inf_str in date_content:
             extract_str = re.findall(f'{self.exp_str}\ (.*?)\ \(UTC', date_content)[0]              
             return extract_str
@@ -78,12 +113,26 @@ class ProtectListener():
             return (pd.Timestamp.max).to_pydatetime(warn=False).strftime("%H:%M, %-d %B %Y")
         
         
-    def __check_state(self, extract):
+    def _check_state(self, extract):
+        """
+        Called in _get_expiry().
+        Given a list of extracted expiry date, further label it using 
+        protection type ({edit, move}) and level (semi (autoconfirmed) or full (sysop)).      
+        ...
+        Parameters:
+        -----------
+        extract (list): output of _regrex1 or _regrex2
+        ...
+        Returns:
+        -----------
+        states_dict (dict): specify which level and which type, and also 
+                    respective expiry date.
+        """
         states_dict = {"autoconfirmed_edit": 0, "expiry1": None,
                   "autoconfirmed_move": 0, "expiry11": None,
                   "sysop_edit": 0, "expiry2": None,
                   "sysop_move": 0, "expiry21": None}
-
+        
         len_extract = len(extract)
         for i in range(len_extract):
             action_tup = extract[i]
@@ -94,22 +143,25 @@ class ProtectListener():
 
             if mask_auto_edit:
                 states_dict["autoconfirmed_edit"] = int(mask_auto_edit)
-                states_dict["expiry1"] = self.__extract_date(action_tup[1])
+                states_dict["expiry1"] = self._extract_date(action_tup[1])
             if mask_auto_move:
                 states_dict["autoconfirmed_move"] = int(mask_auto_move)
-                states_dict["expiry11"] = self.__extract_date(action_tup[1])
+                states_dict["expiry11"] = self._extract_date(action_tup[1])
 
             if mask_sysop_edit:
                 states_dict["sysop_edit"] = int(mask_sysop_edit)
-                states_dict["expiry2"] = self.__extract_date(action_tup[1])
+                states_dict["expiry2"] = self._extract_date(action_tup[1])
             if mask_sysop_move:
                 states_dict["sysop_move"] = int(mask_sysop_move)
-                states_dict["expiry21"] = self.__extract_date(action_tup[1])
+                states_dict["expiry21"] = self._extract_date(action_tup[1])
     
         return states_dict
     
     
-    def __month_lng(self, string):
+    def _month_lng(self, string):
+        """Called in _get_expiry. Substitute non-english month name with english one.
+        For now only support DE.
+        """
         if self.lng == "de":
             de_month = {"März": "March", "Dezember": "December", "Mär": "Mar", "Mai": "May", "Dez": "Dec", "Januar": "January", 
                     "Februar": "February", "Juni": "June", 
@@ -124,8 +176,15 @@ class ProtectListener():
             return string
             
     
-    def __get_expiry(self):
-        """"""
+    def _get_expiry(self):
+        """
+        Called in get_protect(). Extract expiry time from self.df["params"] and self.df["comment"].
+        ...
+        Returns:
+        --------
+        protect_log (pd.DataFrame): expiry1: autoconfirmed_edit;expiry11: autoconfirmed_move; expiry2: sysop_edit
+                        expiry21: sysop_move.
+        """
         protect_log = (self.df).copy()
         self.test_log = protect_log
         
@@ -140,8 +199,8 @@ class ProtectListener():
             for idx, com in protect_log['params'].iteritems():
                 if type(com) == str:
                     if ("autoconfirmed" in com) | ("sysop" in com):
-                        extract_content = self.__regrex1(com) if len(self.__regrex1(com)) != 0 else self.__regrex2(com)
-                        expiry[idx] = self.__check_state(extract_content)
+                        extract_content = self._regrex1(com) if len(self._regrex1(com)) != 0 else self._regrex2(com)
+                        expiry[idx] = self._check_state(extract_content)  # Which type it belongs to?
                     else:
                         pass
                 else:
@@ -150,12 +209,12 @@ class ProtectListener():
         # Then check "comment" column.
         for idx, com in protect_log['comment'].iteritems():
             if ("autoconfirmed" in com) | ("sysop" in com):
-                extract_content = self.__regrex1(com) if len(self.__regrex1(com)) != 0 else self.__regrex2(com)
-                expiry[idx] = self.__check_state(extract_content)
+                extract_content = self._regrex1(com) if len(self._regrex1(com)) != 0 else self._regrex2(com)
+                expiry[idx] = self._check_state(extract_content)  # Which type it belongs to?
             else:
                 pass
         
-        # Fill expiry into the dataframe.
+        # Fill expiry date into the dataframe.
         for k, v in expiry.items():
             protect_log.loc[k, "autoconfirmed_edit"] = v["autoconfirmed_edit"]
 
@@ -166,7 +225,7 @@ class ProtectListener():
                     try:
                         protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %B %d, %Y")
                     except:
-                        v["expiry1"] = self.__month_lng(v["expiry1"])
+                        v["expiry1"] = self._month_lng(v["expiry1"])
                         try:
                             protect_log.loc[k, "expiry1"] = datetime.strptime(v["expiry1"], "%H:%M, %d. %b. %Y")
                         except:
@@ -181,7 +240,7 @@ class ProtectListener():
                     try:
                         protect_log.loc[k, "expiry11"] = datetime.strptime(v["expiry11"], "%H:%M, %B %d, %Y")
                     except:
-                        v["expiry11"] = self.__month_lng(v["expiry11"])
+                        v["expiry11"] = self._month_lng(v["expiry11"])
                         try:
                             protect_log.loc[k, "expiry11"] = datetime.strptime(v["expiry11"], "%H:%M, %d. %b. %Y")
                         except:
@@ -196,7 +255,7 @@ class ProtectListener():
                     try:
                         protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %B %d, %Y")
                     except:
-                        v["expiry2"] = self.__month_lng(v["expiry2"])
+                        v["expiry2"] = self._month_lng(v["expiry2"])
                         try:
                             protect_log.loc[k, "expiry2"] = datetime.strptime(v["expiry2"], "%H:%M, %d. %b. %Y")
                         except:
@@ -211,7 +270,7 @@ class ProtectListener():
                     try:
                         protect_log.loc[k, "expiry21"] = datetime.strptime(v["expiry21"], "%H:%M, %B %d, %Y")
                     except:
-                        v["expiry21"] = self.__month_lng(v["expiry21"])
+                        v["expiry21"] = self._month_lng(v["expiry21"])
                         try:
                             protect_log.loc[k, "expiry21"] = datetime.strptime(v["expiry21"], "%H:%M, %d. %b. %Y")
                         except:
@@ -221,8 +280,20 @@ class ProtectListener():
         return protect_log
     
     
-    def __check_unknown(self, protect_log):
-        """"""
+    def _check_unknown(self, protect_log):
+        """
+        Called in get_protect(). Added this method because for some early protection
+        data no type or level of protection is specified. The type "extendedconfirmed"
+        is also considered as unknown beacuase we only consider semi or full protection.
+        ...
+        Parameters:
+        -----------
+        protect_log (pd.DataFrame): output of _get_expiry.
+        ...
+        Returns:
+        -----------
+        protect_log (pd.DataFrame): dataframe in which unknown action is already labeled.
+        """
         mask_unknown_auto_edit = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed_edit"].isnull())
         mask_unknown_auto_move = (protect_log["action"] != "unprotect") & (protect_log["autoconfirmed_move"].isnull())
         mask_unknown_sys_edit = (protect_log["action"] != "unprotect") & (protect_log["sysop_edit"].isnull())
@@ -245,8 +316,8 @@ class ProtectListener():
         return protect_log
     
      
-    def __insert_row(self, row_number, df, row_value):
-        "Function to insert row in the dataframe."
+    def _insert_row(self, row_number, df, row_value):
+        "Called in _check_unprotect(). Function to insert row in the dataframe."
         start_upper = 0
         end_upper = row_number 
         start_lower = row_number 
@@ -262,15 +333,23 @@ class ProtectListener():
         return df
 
     
-    def __check_unprotect(self, protect_log):
-        """"""        
+    def _check_unprotect(self, protect_log):
+        """Called in get_protect. Check which type of protection is cancelled.
+        ...
+        Parameters:
+        -----------
+        protect_log (pd.DataFrame): dataframe in which unprotect type is labeled.
+        """
+        # Get indices of all unprotect records.
         idx_unprotect = protect_log[protect_log["action"] == "unprotect"].index
+        
+        # Label which type is unprotected.
         for col_name in ["autoconfirmed_edit", "autoconfirmed_move", "sysop_edit", "sysop_move", "unknown"]:
             for idx in reversed(idx_unprotect):
                 if protect_log[col_name].loc[idx + 1] == 1:
                     protect_log.loc[idx, col_name] = 1
                     
-        # Deal with upgraded unknown protection
+        # Deal with upgraded unknown protection, normally omitted.
         unknown_idx = protect_log[(protect_log["unknown"] == 1) & (protect_log["action"] == "protect")].index
         upgrade_sus = protect_log.loc[unknown_idx - 1]
         
@@ -284,15 +363,28 @@ class ProtectListener():
             aux_unprotect.loc[:, "timestamp"] = upgrade_sus.loc[higher_level_idx]["timestamp"].values
             
             for row in aux_unprotect.iterrows():
-                self.__insert_row(row[0], protect_log, row[1].values)
+                self._insert_row(row[0], protect_log, row[1].values)
         else:
             pass
         
         return protect_log.sort_index()
     
     
-    def __select_level(self, protect_log, level):
-        """'fully_edit', 'fully_move', 'semi_edit', 'semit_move', 'unknown'"""
+    def _select_level(self, protect_log, level):
+        """
+        Called in get_protect. For each level
+        'fully_edit', 'fully_move', 'semi_edit', 'semit_move', 'unknown',
+        pick up the expiry date for further plot.
+        ...
+        Parameters:
+        -----------
+        protect_log (pd.DataFrame): output of _check_unprotect.
+        level (str): one of {"semi_edit", "semi_move", "fully_edit", "fully_move", "unknown"}.
+        ...
+        Returns:
+        -----------
+        protect_table (pd.DataFrame): 
+        """
         
         protect_log[["autoconfirmed_edit",
                  "autoconfirmed_move",
@@ -374,8 +466,8 @@ class ProtectListener():
         return protect_table
                 
                     
-    def __get_unprotect(self, protect_table):
-        """"""
+    def _get_unprotect(self, protect_table):
+        """Set unprotect time as a new column, in order to compare it with expiry time."""
         pp_log_shift = protect_table.shift(1)
         pp_unprotect = pp_log_shift[pp_log_shift["action"] == "unprotect"]["timestamp"]
         
@@ -391,8 +483,8 @@ class ProtectListener():
         return protect_table
     
     
-    def __get_final(self, protect_table):
-        """"""
+    def _get_final(self, protect_table):
+        """Called in get_protect(). Determine the true finish time."""
         protect_table["finish"] = protect_table[["expiry", "unprotect"]].min(axis=1).astype('datetime64[s]')
         protect_table = protect_table.drop(["expiry", "unprotect"], axis=1)
         protect_table = protect_table.drop(protect_table[protect_table["action"] == "unprotect"].index).reset_index(drop=True)
@@ -413,8 +505,8 @@ class ProtectListener():
         return protect_table
     
     
-    def __get_plot(self, final_table, level):
-        """"""
+    def _get_plot(self, final_table, level):
+        """Called in get_protect(). Get the dataframe for Gantt Chart plotting."""
         # Level's name
         levels = {"semi_edit": "Semi-protection (edit)",
               "semi_move": "Semi-protection (move)",
@@ -422,7 +514,7 @@ class ProtectListener():
               "fully_move": "Full-protection (move)",
               "unknown": "Other protection"}
 
-        # For Gantt chart
+        # For plotly Gantt chart
         protect_plot = final_table[["type", "timestamp", "finish"]].rename({"type": "Task", "timestamp": "Start", "finish": "Finish"}, axis=1)
         protect_plot["Task"] = protect_plot["Task"].replace("protect", levels[level])
         protect_plot["Resource"] = protect_plot["Task"]
@@ -440,7 +532,19 @@ class ProtectListener():
     
     
 class TemplateListener():
-    
+    """
+    Class to extract templates information from WikiWho and HTML content.
+    ...
+    Attributes:
+    -----------
+    df (pd.DataFrame): all actions from ConflictManager including stopwords.
+    page (pd.Series): page_id, title and namespace.
+    lng(str): langauge from {'en', 'de'}.
+    api (Object): Wikipedia API.
+    templates (list): the templates we are interested in.
+    tl (list): first word of templates, in lowercase
+    plot_protect (pd.DataFrame): plot dataframe from ProtectListener 
+    """
     def __init__(self, all_actions, protection_plot, lng, wikipediadv_api, page):
         self.df = all_actions
         self.lng = lng
@@ -457,9 +561,47 @@ class TemplateListener():
             
         self.tl = [tl.lower().split()[0] for tl in self.templates]        
         self.plot_protect = protection_plot
-                
-    def get_adjacent(self, tl):
-        """Label adjacent '{{' and template name."""
+        
+    def get_template(self, tl):
+        """Called in listener().
+        Get template tokens, either certainly or suspicious.
+        ...
+        Parameters:
+        -----------
+        tl (str): first word of template, in lowercase form.
+        ...
+        Returns:
+        -----------
+        captured (pd.DataFrame): template tokens for sure.
+        suspicious (pd.DataFrame): these tokens are probably template tokens.
+        self._get_diff(suspicious, captured) (pd.DataFrame): tokens in suspicous
+                                   but not in captured.
+        """
+        # Get template tokens whose ids are adjacent, also non-adjacent tokens as suspicious tokens.
+        match_rough2, match_rough = self._get_pattern(tl)
+        
+        final_idx = match_rough2[match_rough2["final"] == 1].index.union(match_rough2[match_rough2["final"] == 1].index + 1)
+        match_rough3 = match_rough2.loc[final_idx]
+        
+        suspicious = match_rough[match_rough["token"] == tl].iloc[:, :11].drop(["index"], axis=1).reset_index(drop=True)
+        captured = match_rough3[match_rough3["token"] == tl].iloc[:, :11].drop(["index"], axis=1).reset_index(drop=True)
+        
+        return captured, suspicious, self._get_diff(suspicious, captured)
+    
+    def _get_adjacent(self, tl):
+        """Called in _get_pattern().
+        Label adjacent '{{' and template name whose ids are adjacent.
+        ...
+        Parameters:
+        -----------
+        tl (str): first word of template, in lowercase form.
+        ...
+        Returns:
+        -----------
+        match_rough (pd.DataFrame): column "adjcent = 1" means these two tokens
+                        are adjacent; "{{ = 1" means token is "{{";
+                        "tl = 1" means token is template's name.
+        """
         # Sort by revision time and token id.
         match_source = (self.df.copy()).sort_values(['rev_time', 'token_id'])
         
@@ -478,9 +620,21 @@ class TemplateListener():
         
         return match_rough
     
-    def get_pattern(self, tl):
-        """Capture '{{template_name...' pattern."""
-        match_rough = self.get_adjacent(tl)
+    def _get_pattern(self, tl):
+        """Called in get_template(). Capture '{{template_name...' pattern.
+        ...
+        Parameters:
+        -----------
+        tl (str): first word of template, in lowercase form.
+        ...
+        Returns:
+        -----------
+        match_rough2 (pd.DataFrame): Template tokens, like '{{','good', their ids are adjacent.
+        match_rough (pd.DataFrame): column "adjcent = 1" means these two tokens
+                        are adjacent; "{{ = 1" means token is "{{";
+                        "tl = 1" means token is template's name.
+        """
+        match_rough = self._get_adjacent(tl)
         
         # Capture adjacent tokens.
         adjcent_idx = match_rough[match_rough["adjcent"] == 1].index.union(match_rough[match_rough["adjcent"] == 1].index + 1)
@@ -490,38 +644,47 @@ class TemplateListener():
         match_rough2['sum'] = match_rough2['{{'] + match_rough2.shift(-1)['tl']
         match_rough2['final'] = ((match_rough2["adjcent"] == 1) & (match_rough2["sum"] == 2)).astype(int)
         
-        return match_rough2
+        return match_rough2, match_rough
     
-    def __get_diff(self, df1, df2):
+    def _get_diff(self, df1, df2):
+        """Called in get_template(). Get the elements in df2 but not
+        in df1.
+        """
         join_df = pd.concat([df1, df2]).reset_index(drop=True)
         unique_idx = [x[0] for x in join_df.groupby(list(join_df.columns)).groups.values() if len(x) == 1]
         
         return join_df.reindex(unique_idx).sort_values(["rev_time"]).reset_index(drop=True)
-    
-    def get_template(self, tl):
-        """Get final template data."""
-        match_rough2 = self.get_pattern(tl)
-        
-        final_idx = match_rough2[match_rough2["final"] == 1].index.union(match_rough2[match_rough2["final"] == 1].index + 1)
-        match_rough3 = match_rough2.loc[final_idx]
-        
-        # Is there any potential template editing history we have missed?
-        match_rough = self.get_adjacent(tl)
-        
-        suspicious = match_rough[match_rough["token"] == tl].iloc[:, :11].drop(["index"], axis=1).reset_index(drop=True)
-        captured = match_rough3[match_rough3["token"] == tl].iloc[:, :11].drop(["index"], axis=1).reset_index(drop=True)
-        
-        return captured, suspicious, self.__get_diff(suspicious, captured)
-
-    
-    def get_prev_rev(self, current_rev):
+   
+    def _get_prev_rev(self, current_rev):
+        """Called in get_missing_tl(). Given a revision, get previous revision.
+        ...
+        Parameters:
+        -----------
+        current_rev (str): current revision.
+        ...
+        Returns:
+        -----------
+        prev_rev (str): previous revision.
+        """
         loc_current_rev = np.where(self.token_rev_ids == current_rev)[0][0]
         prev_rev = self.token_rev_ids[loc_current_rev - 1]
 
         return prev_rev
     
     
-    def template_capturer(self, html_content, template):
+    def _template_capturer(self, html_content, template):
+        """Called in get_missing_tl(). Capture template from HTML contents.
+        ...
+        Parameters:
+        -----------
+        html_content (str): revision difference content in HTML, extracted using
+                WikipediaDV.api.get_talk_rev_diff.
+        template (str): template name we want to detect.
+        ...
+        Returns:
+        -----------
+        0: not missed; 1: missed
+        """
         html_content = html_content.lower()
         pat1 = f'<td class="diff-deletedline"><div>{{{{<del class="diffchange diffchange-inline">{template}</del> article}}}}'
         pat2 = f'<td class="diff-addedline"><div>{{{{<ins class="diffchange diffchange-inline">{template}</ins> article}}}}'
@@ -539,13 +702,24 @@ class TemplateListener():
     
     
     def get_missing_tl(self, sus):
+        """Called in listener().
+        Check suspicous tokens by HTML contents.
+        ...
+        Parameters:
+        -----------
+        sus (pd.DataFrame): suspicious tokens for all templates.
+        ...
+        Returns:
+        -----------
+        missing (pd.DataFrame): missing tokens that belongs to template names.
+        """
         # Find previous rev_id.
         sus_rev_id = sus["rev_id"].unique()
         
         self.token_rev_ids = self.df.sort_values("rev_time").reset_index(drop=True)["rev_id"].unique()
-        prev_ids = {key: self.get_prev_rev(key) for key in sus_rev_id}
+        prev_ids = {key: self._get_prev_rev(key) for key in sus_rev_id}
         
-        # Retrieve revision changes in the form of html.
+        # Retrieve revision changes in form of HTML.
         diff_response = {}
         for cur, prev in tqdm(prev_ids.items()):
             diff_response[cur] = self.api.get_talk_rev_diff(cur, prev)["*"]
@@ -555,14 +729,15 @@ class TemplateListener():
         for sus_row in sus.iterrows():
             content = diff_response[sus_row[1]["rev_id"]]
             tl_token = sus_row[1]["token"]
-            sus.loc[sus_row[0], "missing"] = self.template_capturer(content, tl_token)
+            sus.loc[sus_row[0], "missing"] = self._template_capturer(content, tl_token)
             
         missing = sus[sus["missing"] == 1].drop("missing", axis=1)
         
         return missing
     
     
-    def to_plot_df(self, standard_df, tl_idx):
+    def _to_plot_df(self, standard_df, tl_idx):
+        "Plot method called in listener()."
         plot_df = standard_df[["action", "rev_time"]].rename({"action": "Task", "rev_time": "Start"}, axis=1)
         plot_df["Start"] = plot_df["Start"].dt.strftime('%Y-%m-%d %H:%M:%S')
         plot_df["Finish"] = plot_df.shift(-1)["Start"].fillna(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -573,17 +748,9 @@ class TemplateListener():
         plot_df = plot_df.reset_index(drop=True)
         
         return plot_df
-        
-    
-#     def rebuild_plot_df(self, unfinish_plot):
-#         mask_not_last_row = (unfinish_plot["Task"] == unfinish_plot.shift(-1)["Task"])
-#         mask_plus = pd.to_datetime(unfinish_plot["Finish"]) - pd.to_datetime(unfinish_plot.shift(-1)["Start"]) > timedelta()
-#         mask_same_start = (unfinish_plot["Start"] == unfinish_plot.shift(-1)["Start"])
-#         mask_to_delete = mask_not_last_row & mask_plus & mask_same_start
-        
-#         return unfinish_plot.loc[~mask_to_delete].reset_index(drop=True)
 
-    def plot_org(self, plot_df):
+    def _plot_org(self, plot_df):
+        "Plot method called in listener()."
         mask_move = (plot_df["Task"] == "Semi-protection (move)") | (plot_df["Task"] == "Full-protection (move)")
         mask_edit = (plot_df["Task"] == "Semi-protection (edit)") | (plot_df["Task"] == "Full-protection (edit)")
         final_plot = plot_df.loc[(~mask_move) & (~mask_edit)]
@@ -602,6 +769,7 @@ class TemplateListener():
     
     
     def listen(self):
+        "Listener."
         display(md("Analysing templates data..."))
         #plot_revs = []        
         missing_revs = []
@@ -635,7 +803,7 @@ class TemplateListener():
         for tl in df_templates["token"].unique():
             name_idx = self.tl.index(tl)
             cap_one_tl = df_templates[df_templates["token"] == tl]
-            plot.append(self.to_plot_df(cap_one_tl, name_idx))
+            plot.append(self._to_plot_df(cap_one_tl, name_idx))
             
         # For protection.
         plot.append(self.plot_protect)
@@ -654,7 +822,7 @@ class TemplateListener():
         plot_merge_task["Resource"] = plot_merge_task["Task"]
         
         
-        self.plot = self.plot_org(plot_merge_task)
+        self.plot = self._plot_org(plot_merge_task)
         
         
         
