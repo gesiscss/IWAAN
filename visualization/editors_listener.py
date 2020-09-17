@@ -682,8 +682,14 @@ class RevisionsManager:
     
 
 class RankedEditorsListener:
-    
-    def __init__(self, agg):        
+    """Class for ranking editors by 48-hour survival actions.
+    ...
+    Attributes:
+    -----------
+    df (pd.DataFrame): stores all survival actions for each editor (if "Unregistered",
+                replace it by IP.) 
+    """
+    def __init__(self, agg):
         # Specify unregistered id.
         surv_total = agg[["rev_time", "editor_str", "editor", "total_surv_48h"]]
         new_editor = pd.DataFrame(np.where(surv_total["editor"] == "Unregistered", surv_total["editor_str"], surv_total["editor"]), columns=["editor"])
@@ -691,6 +697,7 @@ class RankedEditorsListener:
         self.df = surv_total
         
     def listen(self, _range1, _range2, granularity, top):
+        "Listener."
         df_time = self.df[(self.df.rev_time.dt.date >= _range1) &
                 (self.df.rev_time.dt.date <= _range2)].reset_index(drop=True)
         
@@ -708,7 +715,7 @@ class RankedEditorsListener:
         group_surv = df_time.groupby(["rev_time", "editor"]).agg({"total_surv_48h": "sum"}).reset_index()
         group_surv = group_surv.sort_values(["rev_time", "total_surv_48h"], ascending=(True, False))
         
-        # Pick up top20 editors.
+        # Pick up top 5/10/20 editors.
         mask_inlist = group_surv["editor"].isin(editors_top)
         group_surv_top = group_surv.loc[mask_inlist]
         merge_df = group_surv[["rev_time"]].merge(group_surv_top[["rev_time", "editor", "total_surv_48h"]], how="left").reset_index(drop=True)
