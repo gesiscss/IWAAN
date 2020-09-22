@@ -84,28 +84,47 @@ class WCListener():
                 md("Cannot create the wordcloud, there were zero conflict tokens."))
 
 class WCActionsListener():
-    
+    """
+    Class for displaying most frequently changed words.
+    ...
+    Attributes:
+    -----------
+    sources (dict): contains two parts: df "tokens_all" (all actions from ConflictManager) and
+            dict "tokens_inc_stop" (adds/dels/reins with survival states from TokensManager)
+    max_words (int): displaying top max_words frequently changed words. 100 by default.
+    lng (str): {'en', 'de'}
+    _
+    """
     def __init__(self, sources, lng, max_words=100):
         self.max_words = max_words
         self.sources = sources
         self.lng=lng
-        self._range1 = 0
-        self._range2 = 1
         
-    def select_token(self, token, range1, range2):
-        if self.stopwords == 'Not included':
-            token_source = remove_stopwords(self.sources["tokens_source"]["tokens_all"], self.lng)
-        else:
-            token_source = self.sources["tokens_source"]["tokens_all"]
-            
+    def _select_token(self, string, range1, range2):
+        """
+        Called in token_selection_change(). Get string's editing history under
+        a given time frame.
+        ...
+        Attributes:
+        -----------
+        string (str): string by manul selection.
+        range1 (datetime.datetime): date begin.
+        range2 (datetime.datetime): date ends.
+        ...
+        Returns:
+        -----------
+        pd.DataFrame displaying string's history
+        """
+        token_source = self.sources["tokens_source"]["tokens_all"]          
         ranged_token = token_source[(token_source['rev_time'].dt.date >= range1)\
                           & (token_source['rev_time'].dt.date <= range2)]
         
-        return ranged_token[ranged_token['token'] == token]
+        return ranged_token[ranged_token['token'] == string]
             
         
                         
     def revid_selection_change(self, change):
+        "Second click."
         with self.out2:
             clear_output()
             selected_df = self.qgrid_selected_token.get_selected_df()
@@ -117,12 +136,13 @@ class WCActionsListener():
                 print(url)
                    
     def token_selection_change(self, change):
+        "First click."
         with self.out1:
             clear_output()
 
             # Process the involved dataframe.
             token_selected = self.qgrid_token_obj.get_selected_df().reset_index()['string'].iloc[0]
-            selected_token = self.select_token(token_selected, self._range1, self._range2)
+            selected_token = self._select_token(token_selected, self._range1, self._range2)
             df_selected_token = selected_token.drop(['page_id', 'o_editor', 'token', 'o_rev_id', 'article_title'], axis=1)
             new_cols = ['token_id', 'action', 'rev_time', 'editor', 'rev_id']
             df_selected_token = df_selected_token[new_cols].rename({'editor': 'editor_id'}, axis=1)
@@ -132,7 +152,7 @@ class WCActionsListener():
 
             qgrid_selected_token = qgrid.show_grid(df_selected_token)
             self.qgrid_selected_token = qgrid_selected_token
-            display(md(f'**With token *{token_selected}*, select one revision you want to investigate:**'))
+            display(md(f'**With string *{token_selected}*, select one revision you want to investigate:**'))
             display(self.qgrid_selected_token)
             
             self.out2 = Output()
@@ -142,14 +162,14 @@ class WCActionsListener():
     
     def listen(self, _range1, _range2, action, stopwords):
         """
+        Listener.
         """
         if (len(str(_range1.year)) < 4) | (len(str(_range2.year)) < 4):
             return display(md("Please input the correct year format!"))
                        
        
         # Get source data.
-        self.stopwords = stopwords
-        if self.stopwords == 'Not included':
+        if stopwords == 'Not included':
             self.token_calculator = TokensManager(remove_stopwords(self.sources["tokens_source"]["tokens_all"], self.lng))
             actions_no_sw = remove_stopwords(self.sources["tokens_inc_stop"], self.lng)
             add_actions = actions_no_sw["adds"]
@@ -208,10 +228,16 @@ class WCActionsListener():
 
         tokens_action = self.token_calculator.get_all_tokens(adds, dels, reins)
         tokens_action.index = tokens_action.index.rename("string")
+               
+        tokens_action.reset_index(inplace=True)        
+        mask_special = tokens_action["string"] == "<!--"
+        tokens_action = tokens_action[~mask_special]
+        tokens_action.set_index("string", inplace=True)
+        
         if len(tokens_action) != 0:
             qgrid_token_obj = qgrid.show_grid(tokens_action,grid_options={'forceFitColumns':True})
             self.qgrid_token_obj = qgrid_token_obj
-            display(md('**Select one token you are interested in:**'))
+            display(md('**Select one string you are interested in:**'))
             display(self.qgrid_token_obj)
 
             self.out1 = Output()
