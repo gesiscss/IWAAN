@@ -210,19 +210,31 @@ class TokensOwnedListener():
             top_editors_merged = pd.merge(top_editors, first_date[['name', 'rev_time']], on='name').sort_values('rev_time') #adding first date for each editor and sorting by date of first oadd
 
             #plot
-            data = []
+            fig = go.Figure()
             for editor in top_editors_merged['name']: 
                 x = self.summ.loc[self.summ['name']==editor, 'rev_time']
                 y = self.summ.loc[self.summ['name']==editor, 'action']
-                data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
-
-            layout = go.Layout(hovermode='x unified', showlegend=True, margin=go.layout.Margin(l=50,
+                fig.add_trace(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
+            fig.update_layout(hovermode='x unified', showlegend=True, margin=go.layout.Margin(l=50,
                                                                   r=50,
                                                                   b=150,
                                                                   t=10,
                                                                   pad=3))
-            plotly.offline.init_notebook_mode(connected=True)
-            plotly.offline.iplot({"data": data, "layout": layout})
+            fig.show()
+            
+#             data = []
+#             for editor in top_editors_merged['name']: 
+#                 x = self.summ.loc[self.summ['name']==editor, 'rev_time']
+#                 y = self.summ.loc[self.summ['name']==editor, 'action']
+#                 data.append(go.Scatter(x=x, y=y, name = editor, stackgroup='one'))
+
+#             layout = go.Layout(hovermode='x unified', showlegend=True, margin=go.layout.Margin(l=50,
+#                                                                   r=50,
+#                                                                   b=150,
+#                                                                   t=10,
+#                                                                   pad=3))
+#             plotly.offline.init_notebook_mode(connected=True)
+#             plotly.offline.iplot({"data": data, "layout": layout})
 
 
 
