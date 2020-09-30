@@ -840,16 +840,16 @@ class TemplateListener():
             templates_color = {"Semi-protection (edit)":'#262626', "Semi-protection (move)": "#939996",
                          "Full-protection (edit)":'#262626', "Full-protection (move)":'#939996', "Other protection":'#939996'}
         
-        if len(missing_revs) !=0:
-            display(md("**Warning: there are perhaps missing records for template editing!**")) 
-            display(md("The following revisions are possibly missing:"))                
-            display(qgrid.show_grid(missing_revs))
-        else:
-            pass
+        # if len(missing_revs) !=0:
+        #     display(md("**Warning: there are perhaps missing records for template editing!**")) 
+        #     display(md("The following revisions are possibly missing:"))                
+        #     display(qgrid.show_grid(missing_revs))
+        # else:
+        #     pass
         
         if len(self.plot) != 0:
-            display(md("The following templates are captured:"))
-            display(qgrid.show_grid(df_templates))
+            # display(md("The following templates are captured:"))
+            # display(qgrid.show_grid(df_templates))
             display(
                 ff.create_gantt(self.plot, colors=templates_color, 
                            showgrid_x=True, showgrid_y=True, bar_width=0.1, group_tasks=True, 
