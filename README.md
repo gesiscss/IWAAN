@@ -1,6 +1,7 @@
 [![Binder](https://notebooks.gesis.org/binder/badge_logo.svg)](https://notebooks.gesis.org/binder/v2/gh/gesiscss/IWAAN/master?filepath=1_General_Metadata.ipynb)
 <img src="https://user-images.githubusercontent.com/35532045/36342863-ba470006-1404-11e8-9f9f-d1249e4a0b37.png" width="100"> 
 
+Branch including a test version of BTM. 
 
 # IWAAN - Interactive Wikipedia Article Analysis Notebooks
 Entirely based on interactive, repurposable and open Jupyter Notebooks (no coding needed - but code is transparent)
