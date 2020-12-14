@@ -3,7 +3,7 @@
 
 
 # IWAAN - Interactive Wikipedia Article Analysis Notebooks
-Entirely based on interactive, repurposable and open Jupyter Notebooks (no coding needed - but code is transparent)
+Entirely based on interactive, repurposable and open Jupyter Notebooks (no coding needed - but code is transparent).
 
 ## Description
 
