@@ -78,6 +78,7 @@ class ActionsListener():
         
         # Convert to datetime
         agg_actions['rev_time'] = pd.to_datetime(agg_actions['rev_time'])
+
         
         self.df = agg_actions
            
@@ -232,8 +233,9 @@ class ActionsListener():
                        2005-03-22 18:46:14|162969|   1   |
                        ...
         """
-        editor_revisions = self.tokens_all.groupby(["rev_time", 
-                                    "editor"]).agg({'rev_id': 'nunique'}).reset_index().rename({"rev_id":"revisions"}, axis=1)
+        editor_revisions = self.tokens_all.groupby(["rev_time","editor"]).agg({'rev_id': ['nunique', 'min']})
+        editor_revisions.columns = [' '.join(col).strip() for col in editor_revisions.columns.values]
+        editor_revisions = editor_revisions.reset_index().rename({"rev_id nunique":"revisions", "rev_id min": "rev_id"}, axis=1)
         editor_revisions["rev_time"] = editor_revisions["rev_time"].values.astype("datetime64[s]")
         
         return editor_revisions
