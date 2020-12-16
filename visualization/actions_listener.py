@@ -7,6 +7,8 @@ from ipywidgets.widgets import Output
 from metrics.token import TokensManager
 
 from pandas.tseries.offsets import MonthEnd
+import operator
+import numpy as np
 
 
 class ActionsListener():
@@ -41,6 +43,7 @@ class ActionsListener():
         self.page_id = sources["tokens_all"]["page_id"].unique()[0]
         self.editor_column = editor_column
         self.lng = lng
+        self.ores_scores = None
         
     def get_main(self):
         """Run this method before run listener.
@@ -275,11 +278,21 @@ class ActionsListener():
             return actions[~actions['token'].isin(stop_words)]
     
     def listen(self, _range1, _range2, editor, granularity,
-               black, red, blue, green, black_conflict, red_conflict):
+               black, red, blue, green, black_conflict, red_conflict, damage_t, goodwill_t, goodwill_c, damage_c):
         "Listener."
         
         df = self.df[(self.df.rev_time.dt.date >= _range1) &
                 (self.df.rev_time.dt.date <= _range2)]
+        
+        if damage_t != 0 or goodwill_t != 0:
+            not_spam = filter_vandalism_ores(self.ores_scores, 
+                                             goodfaith_cmp=goodwill_c, goodfaith_threshold=goodwill_t, 
+                                             damaging_cmp=damage_c, damaging_threshold=damage_t)
+            df = df[df['rev_id'].isin(not_spam)]
+            #print(len(not_spam), len(df))
+            #print(df[df['rev_id'].isin(not_spam)])
+            #print(len(df[~df['rev_id'].isin(not_spam)]))
+            #print("here", len(df))
         
         df_conflict = df.groupby(pd.Grouper(
             key='rev_time', freq=granularity[0])).agg({'conflicts': ['sum'],
@@ -448,3 +461,27 @@ class ActionsListener():
 
         plotly.offline.init_notebook_mode(connected=True)        
         plotly.offline.iplot({"data": data, "layout": layout})
+        
+        
+        
+def filter_vandalism_ores(res, damaging_threshold=None, goodfaith_threshold=None, damaging_cmp='>', goodfaith_cmp=None):
+    
+    # Operator defintions
+    op = {'<':operator.lt, '>':operator.gt, '=':operator.eq, '>=':operator.ge, '<=':operator.le }
+
+    # Filter out revisions that do not fullfil the thresholds with the corresponding comparators.
+    nonspam = []
+    for rev in res.itertuples(): 
+        if np.isnan(rev.Damaging):
+            continue
+        
+        damaging = True 
+        goodfaith = True
+        if damaging_threshold: 
+            damaging = op[damaging_cmp](rev.Damaging, damaging_threshold)
+        if goodfaith_threshold:
+            goodfaith = op[goodfaith_cmp](rev.Goodfaith, goodfaith_threshold)
+            
+        if damaging & goodfaith:
+                nonspam.append(int(rev.rev_id))            
+    return nonspam
