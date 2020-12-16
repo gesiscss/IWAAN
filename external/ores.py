@@ -1,5 +1,6 @@
 import pandas as pd
 from .api import API, DataView
+import numpy as np
 
 class ORESAPI(API):
 
@@ -57,7 +58,10 @@ class ORESDV(DataView):
             one_rev_dict = res[proj]["scores"][rev]
             df_dict = {}
             for k, v in one_rev_dict.items():
-                df_dict[k] = v["score"]["probability"]["true"]
+                if "score" not in v.keys():
+                    df_dict[k] = np.NaN
+                else:
+                    df_dict[k] = v["score"]["probability"]["true"]
             row = [rev] + list(df_dict.values())
             ores_df.loc[idx] = row
             
