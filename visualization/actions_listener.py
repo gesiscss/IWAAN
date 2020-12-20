@@ -288,11 +288,17 @@ class ActionsListener():
             not_spam = filter_vandalism_ores(self.ores_scores, 
                                              goodfaith_cmp=goodwill_c, goodfaith_threshold=goodwill_t, 
                                              damaging_cmp=damage_c, damaging_threshold=damage_t)
-            df = df[df['rev_id'].isin(not_spam)]
-            #print(len(not_spam), len(df))
-            #print(df[df['rev_id'].isin(not_spam)])
-            #print(len(df[~df['rev_id'].isin(not_spam)]))
-            #print("here", len(df))
+            
+            #idea: filter the vandalism/spam for conflict calculation, as otherwise, it drowns out actual substantial disputes between editors
+            to_filter = df['rev_id'].isin(not_spam)
+            #filters not only the spam,but also the revision right after the spam, since otherwise, spam/vandalism fighters will contribute to conflict scores
+            shifted = to_filter.shift(1)
+            x = to_filter&shifted
+            #replace the first row with the original, since its NaN now
+            x.iloc[:1] = to_filter.iloc[:1]
+            df = df[x]
+            
+         
         
         df_conflict = df.groupby(pd.Grouper(
             key='rev_time', freq=granularity[0])).agg({'conflicts': ['sum'],
