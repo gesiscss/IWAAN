@@ -284,6 +284,9 @@ class ActionsListener():
         df = self.df[(self.df.rev_time.dt.date >= _range1) &
                 (self.df.rev_time.dt.date <= _range2)]
         
+        # Added this to order the df by rev_time, so the next filters (based on ORES) work 
+        df.sort_values(by=['rev_time'], inplace=True)
+        
         if damage_t != 0 or goodwill_t != 0:
             not_spam = filter_vandalism_ores(self.ores_scores, 
                                              goodfaith_cmp=goodwill_c, goodfaith_threshold=goodwill_t, 
@@ -298,6 +301,7 @@ class ActionsListener():
             x.iloc[:1] = to_filter.iloc[:1]
             df = df[x]
             
+            #NOTE: the "secondary filter" ("shifted") will take into account the "last" revision's passing through the treshold. If and what that last revision is changes with the date filter. I.e. a revision could be not filtered out with a narrow time filter, but then be filtered out when previous dates/revisions are included, the last of which triggered the initial threshold filter "to_filter" and passes it on in "shifted"
          
         
         df_conflict = df.groupby(pd.Grouper(
