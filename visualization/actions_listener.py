@@ -384,7 +384,7 @@ class ActionsListener():
         sel = df.index
         if metric == 'None':
             return df
-        elif metric == 'Conflict Score':
+        elif metric == 'Norm. Conflict Score':
             df['conflict_score'] = df[
                 ('conflict', 'sum')] / df[('elegibles', 'sum')]
             sel = ~df['conflict_score'].isnull()
