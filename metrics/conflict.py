@@ -211,9 +211,11 @@ class ConflictManager:
         """
         #changed: time_diff is not calculated for the first insertion so we can emit this checking
         df['conflict'] = np.nan
-        df.loc[conflicts, ['conflict']] = np.log(
-            base) / np.log(df['time_diff'].astype('timedelta64[s]') + 2)
-
+        #df.loc[conflicts, ['conflict']] = np.log(
+        #    base) / np.log(df['time_diff'].astype('timedelta64[s]') + 2)
+        #second verison of conflict score, not using inverted log, but inverted exp, bringing seconds to day values (86400 sec in a day) --> smoothes the curve considerably, avoiding too much weight on the very fast undos
+        x = df['time_diff'].astype('timedelta64[s]') / 86400.0
+        df.loc[conflicts, ['conflict']] = 1.0 / np.exp(x)
         return df
 
     def get_page_conflict_score(self):
