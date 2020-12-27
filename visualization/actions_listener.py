@@ -7,6 +7,8 @@ from ipywidgets.widgets import Output
 from metrics.token import TokensManager
 
 from pandas.tseries.offsets import MonthEnd
+import operator
+import numpy as np
 
 
 class ActionsListener():
@@ -41,6 +43,7 @@ class ActionsListener():
         self.page_id = sources["tokens_all"]["page_id"].unique()[0]
         self.editor_column = editor_column
         self.lng = lng
+        self.ores_scores = None
         
     def get_main(self):
         """Run this method before run listener.
@@ -78,6 +81,7 @@ class ActionsListener():
         
         # Convert to datetime
         agg_actions['rev_time'] = pd.to_datetime(agg_actions['rev_time'])
+
         
         self.df = agg_actions
            
@@ -232,8 +236,9 @@ class ActionsListener():
                        2005-03-22 18:46:14|162969|   1   |
                        ...
         """
-        editor_revisions = self.tokens_all.groupby(["rev_time", 
-                                    "editor"]).agg({'rev_id': 'nunique'}).reset_index().rename({"rev_id":"revisions"}, axis=1)
+        editor_revisions = self.tokens_all.groupby(["rev_time","editor"]).agg({'rev_id': ['nunique', 'min']})
+        editor_revisions.columns = [' '.join(col).strip() for col in editor_revisions.columns.values]
+        editor_revisions = editor_revisions.reset_index().rename({"rev_id nunique":"revisions", "rev_id min": "rev_id"}, axis=1)
         editor_revisions["rev_time"] = editor_revisions["rev_time"].values.astype("datetime64[s]")
         
         return editor_revisions
@@ -273,11 +278,31 @@ class ActionsListener():
             return actions[~actions['token'].isin(stop_words)]
     
     def listen(self, _range1, _range2, editor, granularity,
-               black, red, blue, green, black_conflict, red_conflict):
+               black, red, blue, green, black_conflict, red_conflict, damage_t, goodwill_t, goodwill_c, damage_c):
         "Listener."
         
         df = self.df[(self.df.rev_time.dt.date >= _range1) &
                 (self.df.rev_time.dt.date <= _range2)]
+        
+        # Added this to order the df by rev_time, so the next filters (based on ORES) work 
+        df.sort_values(by=['rev_time'], inplace=True)
+        
+        if damage_t != 0 or goodwill_t != 0:
+            not_spam = filter_vandalism_ores(self.ores_scores, 
+                                             goodfaith_cmp=goodwill_c, goodfaith_threshold=goodwill_t, 
+                                             damaging_cmp=damage_c, damaging_threshold=damage_t)
+            
+            #idea: filter the vandalism/spam for conflict calculation, as otherwise, it drowns out actual substantial disputes between editors
+            to_filter = df['rev_id'].isin(not_spam)
+            #filters not only the spam,but also the revision right after the spam, since otherwise, spam/vandalism fighters will contribute to conflict scores
+            shifted = to_filter.shift(1)
+            x = to_filter&shifted
+            #replace the first row with the original, since its NaN now
+            x.iloc[:1] = to_filter.iloc[:1]
+            df = df[x]
+            
+            #NOTE: the "secondary filter" ("shifted") will take into account the "last" revision's passing through the treshold. If and what that last revision is changes with the date filter. I.e. a revision could be not filtered out with a narrow time filter, but then be filtered out when previous dates/revisions are included, the last of which triggered the initial threshold filter "to_filter" and passes it on in "shifted"
+         
         
         df_conflict = df.groupby(pd.Grouper(
             key='rev_time', freq=granularity[0])).agg({'conflicts': ['sum'],
@@ -359,7 +384,7 @@ class ActionsListener():
         sel = df.index
         if metric == 'None':
             return df
-        elif metric == 'Conflict Score':
+        elif metric == 'Norm. Conflict Score':
             df['conflict_score'] = df[
                 ('conflict', 'sum')] / df[('elegibles', 'sum')]
             sel = ~df['conflict_score'].isnull()
@@ -446,3 +471,27 @@ class ActionsListener():
 
         plotly.offline.init_notebook_mode(connected=True)        
         plotly.offline.iplot({"data": data, "layout": layout})
+        
+        
+        
+def filter_vandalism_ores(res, damaging_threshold=None, goodfaith_threshold=None, damaging_cmp='>', goodfaith_cmp=None):
+    
+    # Operator defintions
+    op = {'<':operator.lt, '>':operator.gt, '=':operator.eq, '>=':operator.ge, '<=':operator.le }
+
+    # Filter out revisions that do not fullfil the thresholds with the corresponding comparators.
+    nonspam = []
+    for rev in res.itertuples(): 
+        if np.isnan(rev.Damaging):
+            continue
+        
+        damaging = True 
+        goodfaith = True
+        if damaging_threshold: 
+            damaging = op[damaging_cmp](rev.Damaging, damaging_threshold)
+        if goodfaith_threshold:
+            goodfaith = op[goodfaith_cmp](rev.Goodfaith, goodfaith_threshold)
+            
+        if damaging & goodfaith:
+                nonspam.append(int(rev.rev_id))            
+    return nonspam
