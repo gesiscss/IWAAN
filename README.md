@@ -2,7 +2,7 @@
 <img src="https://user-images.githubusercontent.com/35532045/36342863-ba470006-1404-11e8-9f9f-d1249e4a0b37.png" width="100"> 
 
 
-# IWAAN - Interactive Wikipedia Article Analysis Notebooks
+# IWAAN - Interactive Wikipedia Article Analysis Notebooks (BETA)
 Entirely based on interactive, repurposable and open Jupyter Notebooks (no coding needed - but code is transparent).
 
 ## Description
@@ -15,13 +15,14 @@ Particuarly, the notebooks it contains help in determining and expressing the im
 
 **No coding skills needed, but code is transparent**
 
-The demo needs no programming knowledge to be used, but offers transparency by simply masking code behind Jupyter's "App mode", allowing more experienced users to dive into the mechanics of the API calls and calculations behind it and immediately modfiy it for their own purpose. 
+The demo needs no programming knowledge to be used, but offers transparency by simply masking code behind "widgets", allowing more experienced users to dive into the mechanics of the API calls and data strcutures behind it and immediately modfiy them for their own purpose. 
 
 **Live data**
 
-All data used comes from live systems (Wikipedia directly or Wikiwho) for the English languge version of Wikipedia, reflecting the current article status. 
+All data used comes from live systems (Wikipedia, Xtools, ORES, Wikiwho), reflecting the current article status. This is also why calculations can take some time, please be patient! (We are working on making things faster)
 
-
+**Languages**
+Currently, we support English and German fully, with Spanish, Basque and Turkish in "Alpha" support. 
 
 ## Getting Started with this Demo
 
@@ -39,6 +40,10 @@ You can switch between the various notebooks.
 ## Need Help? Found a bug?
 
 Submit an issue to GitHub if you find one, and feel free to submit pull requests with bug fixes or changes.
+
+## Future development
+
+We are already working on new features, such as clustering edits together into topics, but this will take a while to reach the (more or less) stable version.
 
 ## Contact
 
