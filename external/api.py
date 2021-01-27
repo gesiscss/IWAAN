@@ -51,7 +51,9 @@ class API:
             self.base = f'{protocol}://{lng}' + '.' + f'{domain}/'
         else:
             self.base = f'{protocol}://{domain}/'
-
+        
+        self.session.headers.update({'User-Agent': 'GESIS-IWAAN'})
+        
     def request(self, url: str) -> dict:
         """Do the request
 
