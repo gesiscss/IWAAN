@@ -42,6 +42,9 @@ class ORESAPI(API):
         self.base = f"{self.base}/v3/scores/{lng + project}"
         
     def get_goodfaith_damage(self, rev_list):
+        if type(rev_list[0]) != str:
+            rev_list = list(map(str, rev_list))
+        
         rev_ids = '|'.join(rev_list)
         
         return self.request(f'{self.base}?models=goodfaith%7Cdamaging&revids={rev_ids}')
@@ -50,6 +53,9 @@ class ORESAPI(API):
 class ORESDV(DataView):
     
     def get_goodfaith_damage(self, rev_list):
+        if type(rev_list[0]) != str:
+            rev_list = list(map(str, rev_list))
+            
         res = self.api.get_goodfaith_damage(rev_list)
         
         ores_df = pd.DataFrame(columns=["rev_id", "Damaging", "Goodfaith"])
@@ -62,7 +68,7 @@ class ORESDV(DataView):
                     df_dict[k] = np.NaN
                 else:
                     df_dict[k] = v["score"]["probability"]["true"]
-            row = [rev] + list(df_dict.values())
+            row = [int(rev)] + list(df_dict.values())
             ores_df.loc[idx] = row
             
         return ores_df

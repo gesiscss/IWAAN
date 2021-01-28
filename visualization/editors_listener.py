@@ -493,9 +493,8 @@ class RevisionsManager:
         df_merge1 = df_ratios.merge(df_opponents, on="rev_id", how="left")
         df_ores = self._get_ores(df_merge1)
         df_merge2 = df_merge1.merge(df_ores, on="rev_id", how="left").set_index("rev_time")
-        
         return df_merge2
-
+        
     def _add_revision_id(self):
         """
         Add revision id to aggregation dataframe.
@@ -513,7 +512,7 @@ class RevisionsManager:
         
         # Merge aggregation table and revision time/id table.
         agg_with_revs = self.agg_actions.merge(revs_to_merged, on="rev_time", how="left")
-        agg_with_revs.insert(1, "rev_id", agg_with_revs["revision"])
+        #agg_with_revs.insert(1, "rev_id", agg_with_revs["revision"])
         agg_with_revs = agg_with_revs.drop("revision", axis=1).sort_values("rev_time").reset_index(drop=True)
 
         return agg_with_revs
