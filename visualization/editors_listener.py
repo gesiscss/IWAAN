@@ -363,7 +363,7 @@ class EditorsListener:
         "Second click and display comment."
         with self.out2:
             clear_output()
-            self.selected_rev = self.second_qgrid.get_selected_df()["rev_id"].iloc[0]
+            self.selected_rev = str(self.second_qgrid.get_selected_df()["rev_id"].iloc[0]).encode("utf-8").decode("utf-8")
             self.search_widget.value = self.selected_rev
             display(md("Loading comments..."))
             self.get_comments()
