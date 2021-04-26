@@ -125,8 +125,7 @@ class WikipediaDV(DataView):
     def get_talk_rev_diff(self, fromrev, torev) -> pd.Series:
 
         res = self.api.get_talk_rev_diff(fromrev, torev) 
-        talk_diff = pd.Series(next(iter(res.values()))).rename(columns={"*":"content"})
-
+        talk_diff = pd.Series(next(iter(res.values())))
         return talk_diff
     
     def get_protection(self, page: str) -> pd.DataFrame:

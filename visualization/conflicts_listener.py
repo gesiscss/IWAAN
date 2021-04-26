@@ -207,7 +207,7 @@ class ConflictsActionListener():
         df = df.rename(columns={"editor":'editor_id'})
         self.sources['Editors']['editor_id'] = self.sources['Editors']['editor_id'].astype(str)
         df['editor_id'] = df['editor_id'].astype(str)
-        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(df, right_index=True, on='editor_id', how='outer')
+        conflicts_merged = self.sources['Editors'][['editor_id', 'name']].merge(df, on='editor_id', how='outer')
         df = conflicts_merged[conflicts_merged['token'].notnull()].copy()
         
         #filling values for original insertions
@@ -223,7 +223,7 @@ class ConflictsActionListener():
         #self.conflicts.reset_index(inplace=True)
         counts = df[['token_id', 'token']].groupby(['token_id']).count()
         #count column
-        df = counts.merge(df, right_index=True, on='token_id', how='outer').rename(columns = {'token_x':'count','token_y':'token'}).reset_index()
+        df = counts.merge(df, left_index=True, right_on='token_id', how='outer').rename(columns = {'token_x':'count','token_y':'token'}).reset_index()
         #order column
         g = df.sort_values(['time_diff_secs']).groupby('token_id', as_index=False)
         df['order'] = g.cumcount()

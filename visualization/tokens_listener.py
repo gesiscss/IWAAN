@@ -49,7 +49,7 @@ class TokensListener():
         #get editor names by editor id
         self.token_source = self.token_source.rename(columns={"editor":'editor_id'})
         self.token_source['editor_id'] = self.token_source['editor_id'].astype(str)
-        tokens_merged = self.editors[['editor_id', 'name']].merge(self.token_source, right_index=True, on='editor_id', how='outer')
+        tokens_merged = self.editors[['editor_id', 'name']].merge(self.token_source, on='editor_id', how='outer')
         self.token_source = tokens_merged[tokens_merged['token'].notnull()].copy()
         
     def convert_time_diff(time_diff):
@@ -161,7 +161,7 @@ class TokensOwnedListener():
 #         self.token_source = self.token_source.rename(columns={"editor":'editor_id'})
         self.editors['o_editor'] = self.editors['editor_id'].astype(str)
         self.token_source['o_editor'] = self.token_source['o_editor'].astype(str)
-        tokens_merged = self.editors[['o_editor', 'name']].merge(self.token_source, right_index=True, on='o_editor', how='outer')
+        tokens_merged = self.editors[['o_editor', 'name']].merge(self.token_source, on='o_editor', how='outer')
         self.token_source = tokens_merged[tokens_merged['token'].notnull()].copy()
         
         
