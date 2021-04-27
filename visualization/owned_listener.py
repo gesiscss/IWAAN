@@ -13,7 +13,7 @@ class OwnedListener():
         self.editor = editor
 
         self.days = df.loc[df['o_editor'] == editor, 'rev_time'
-            ].dt.to_period('D').unique()
+            ].dt.tz_localize(None).dt.to_period('D').unique()
         today = pd.Period(datetime.datetime.today(), freq='D')
         self.days = pd.Series(np.append(self.days, today)).sort_values(ascending=False)
         self.df['rev_time'] = pd.to_datetime(self.df['rev_time']).dt.tz_localize(None)
