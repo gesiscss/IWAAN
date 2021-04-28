@@ -70,7 +70,7 @@ class ActionsListener():
         agg_actions = agg_actions.rename({"editor": "editor_id"}, axis=1)
         
         # Grab user names using WikipediaDV.
-        print("Downloading editor usernames...")
+        print("\n\n\n\n\nDownloading editor usernames...\n\n\n\n")
         self.editors = self.wikidv.get_editors(agg_actions['editor_id'].unique()).rename(columns = {'userid': 'editor_id'})
         
         # Merge the names of the editors to the aggregated actions dataframe.
