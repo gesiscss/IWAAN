@@ -28,7 +28,7 @@ Currently, we support English and German fully, with Spanish, Basque and Turkish
 
 **Instant start**
 
-Use the [Binder link](https://notebooks.gesis.org/binder/badge_logo.svg)](https://notebooks.gesis.org/binder/v2/gh/gesiscss/IWAAN/master?filepath=1_General_Metadata.ipynb) to run the notebooks.  Then select the article you want to analyse. First explore the article; go through the notebooks (which will open in different tabs in your browser) in order and you will be further on be able to also inspect users more in details. 
+Use the [Binder link](https://notebooks.gesis.org/binder/v2/gh/gesiscss/IWAAN/master?filepath=1_General_Metadata.ipynb) to run the notebooks.  Then select the article you want to analyse. First explore the article; go through the notebooks (which will open in different tabs in your browser) in order and you will be further on be able to also inspect users more in details. 
 You can switch between the various notebooks. 
 
 **For a local installation you're going to need:**
